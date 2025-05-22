@@ -1,5 +1,10 @@
 import { END, START, StateGraph } from "@langchain/langgraph";
-import { GraphAnnotation, GraphConfiguration, GraphState } from "./types.js";
+import {
+  GraphAnnotation,
+  GraphConfig,
+  GraphConfiguration,
+  GraphState,
+} from "./types.js";
 import {
   generatePlan,
   initialize,
@@ -9,6 +14,7 @@ import {
   interruptPlan,
 } from "./nodes/index.js";
 import { isAIMessage } from "@langchain/core/messages";
+import { pauseSandbox } from "./utils/sandbox.js";
 
 /**
  * @param {GraphState} state - The current graph state.
@@ -33,7 +39,10 @@ function routeAfterPlan(state: GraphState): "interrupt-plan" | typeof END {
  * @param {GraphState} state - The current graph state.
  * @returns {typeof END | "take-action"} The next node to execute, or END if the process should stop.
  */
-function takeActionOrEnd(state: GraphState): typeof END | "take-action" {
+async function takeActionOrEnd(
+  state: GraphState,
+  config: GraphConfig,
+): Promise<typeof END | "take-action"> {
   const { messages } = state;
   const lastMessage = messages[messages.length - 1];
 
@@ -41,6 +50,12 @@ function takeActionOrEnd(state: GraphState): typeof END | "take-action" {
   if (isAIMessage(lastMessage) && lastMessage.tool_calls?.length) {
     return "take-action";
   }
+
+  // First, pause the sandbox before ending the graph.
+  if (config.configurable?.sandbox_session_id) {
+    await pauseSandbox(config.configurable.sandbox_session_id);
+  }
+
   return END;
 }
 
