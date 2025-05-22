@@ -6,30 +6,32 @@ import {
   generateAction,
   takeAction,
   rewritePlan,
+  interruptPlan,
 } from "./nodes/index.js";
-import { isAIMessage, isToolMessage } from "@langchain/core/messages";
+import { isAIMessage } from "@langchain/core/messages";
 
 /**
- * After generating a plan, ensure there is an approved tool message.
- * If there is, route to the generate-action node. Otherwise, route to the rewrite-plan node.
+ * @param {GraphState} state - The current graph state.
+ * @returns {"interrupt-plan" | typeof END} The next node to execute, or END if the process should stop.
  */
-function routeAfterPlan(state: GraphState): "generate-action" | "rewrite-plan" {
+function routeAfterPlan(state: GraphState): "interrupt-plan" | typeof END {
   const { messages } = state;
-  // Search for a tool message responding to the "session_plan" tool call where the content is "approved"
-  const planApprovedMessage = messages.find(
-    (m) =>
-      isToolMessage(m) && m.name === "session_plan" && m.content === "approved",
-  );
-  if (planApprovedMessage) {
-    return "generate-action";
+  const lastMessage = messages[messages.length - 1];
+  if (isAIMessage(lastMessage) && !lastMessage.tool_calls) {
+    // The last message is an AI message without tool calls. This indicates the LLM generated followup questions.
+    return END;
   }
-  // If this does not exist, we should rewrite the plan.
-  return "rewrite-plan";
+
+  return "interrupt-plan";
 }
 
 /**
- * After taking action, ensure there is an AI message with tool calls.
- * If there is, route to the take-action node. Otherwise, end the graph.
+ * Routes to the next appropriate node after taking action.
+ * If the last message is an AI message with tool calls, it routes to "take-action".
+ * Otherwise, it ends the process.
+ *
+ * @param {GraphState} state - The current graph state.
+ * @returns {typeof END | "take-action"} The next node to execute, or END if the process should stop.
  */
 function takeActionOrEnd(state: GraphState): typeof END | "take-action" {
   const { messages } = state;
@@ -46,18 +48,18 @@ const workflow = new StateGraph(GraphAnnotation, GraphConfiguration)
   .addNode("initialize", initialize)
   .addNode("generate-plan", generatePlan)
   .addNode("rewrite-plan", rewritePlan)
+  .addNode("interrupt-plan", interruptPlan, {
+    // TODO: Hookup `Command` in interruptPlan node so this actually works.
+    ends: [END, "rewrite-plan", "generate-action"],
+  })
   .addNode("generate-action", generateAction)
   .addNode("take-action", takeAction)
   .addEdge(START, "initialize")
   .addEdge("initialize", "generate-plan")
-  .addConditionalEdges("generate-plan", routeAfterPlan, [
-    "generate-action",
-    "rewrite-plan",
-  ])
-  .addConditionalEdges("rewrite-plan", routeAfterPlan, [
-    "generate-action",
-    "rewrite-plan",
-  ])
+  // TODO: Update routing to work w/ new interrupt node.
+  .addConditionalEdges("generate-plan", routeAfterPlan, ["interrupt-plan", END])
+  // Always interrupt after rewriting the plan.
+  .addEdge("rewrite-plan", "interrupt-plan")
   .addEdge("generate-plan", "generate-action")
   .addConditionalEdges("generate-action", takeActionOrEnd, ["take-action", END])
   .addEdge("take-action", "generate-action");

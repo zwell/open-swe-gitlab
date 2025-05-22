@@ -20,9 +20,17 @@ export type TargetRepository = {
 
 export const GraphAnnotation = Annotation.Root({
   messages: MessagesAnnotation.spec.messages,
+  proposedPlan: Annotation<string[]>({
+    reducer: (_state, update) => update,
+    default: () => [],
+  }),
   plan: Annotation<PlanItem[]>({
     reducer: (_state, update) => update,
     default: () => [],
+  }),
+  planChangeRequest: Annotation<string | undefined>({
+    reducer: (_state, update) => update,
+    default: () => undefined,
   }),
 });
 
