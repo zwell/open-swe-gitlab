@@ -5,6 +5,7 @@ import { GraphState } from "../types.js";
 import { Sandbox } from "@e2b/code-interpreter";
 import { readFile, writeFile } from "../utils/read-write.js";
 import { getCurrentTaskInput } from "@langchain/langgraph";
+import { fixGitPatch } from "../utils/diff.js";
 
 const applyPatchToolSchema = z.object({
   diff: z.string().describe("The diff to apply. Use a standard diff format."),
@@ -40,10 +41,15 @@ export const applyPatchTool = tool(
 
     let patchedContent: string | false;
     try {
-      patchedContent = applyPatch(readFileOutput, diff);
+      const fixedDiff = fixGitPatch(diff, {
+        [file_path]: readFileOutput,
+      });
+      console.log("\n\nfixedDiff\n\n", fixedDiff);
+      patchedContent = applyPatch(readFileOutput, fixedDiff);
     } catch (e) {
       console.error("Failed to apply patch", e);
-      return `FAILED TO APPLY PATCH: The diff could not be applied to file '${file_path}'. This may be due to an invalid diff format or conflicting changes with the file's current content. Original content length: ${readFileOutput.length}, Diff: ${diff.substring(0, 100)}...`;
+      const errMessage = e instanceof Error ? e.message : "Unknown error";
+      return `FAILED TO APPLY PATCH: The diff could not be applied to file '${file_path}'.\n\nError: ${errMessage}`;
     }
 
     if (patchedContent === false) {
