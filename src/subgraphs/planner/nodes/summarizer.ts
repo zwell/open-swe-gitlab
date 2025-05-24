@@ -2,8 +2,15 @@ import { z } from "zod";
 import { GraphConfig } from "../../../types.js";
 import { PlannerGraphState, PlannerGraphUpdate } from "../types.js";
 import { loadModel, Task } from "../../../utils/load-model.js";
-import { isHumanMessage, ToolMessage } from "@langchain/core/messages";
-import { getMessageContentString } from "../../../utils/message-content.js";
+import {
+  AIMessage,
+  isHumanMessage,
+  ToolMessage,
+} from "@langchain/core/messages";
+import {
+  getMessageContentString,
+  getMessageString,
+} from "../../../utils/message/content.js";
 
 const systemPrompt = `You are operating as a terminal-based agentic coding assistant built by LangChain. It wraps LLM models to enable natural language interaction with a local codebase. You are expected to be precise, safe, and helpful.
 
@@ -42,12 +49,16 @@ export async function summarizer(
   state: PlannerGraphState,
   config: GraphConfig,
 ): Promise<PlannerGraphUpdate> {
-  const model = await loadModel(config, Task.PLANNER);
+  const model = await loadModel(config, Task.SUMMARIZER);
   const modelWithTools = model.bindTools([condenseContextTool], {
     tool_choice: condenseContextTool.name,
   });
 
   const firstUserMessage = state.messages.find(isHumanMessage);
+
+  const conversationHistoryStr = `Here is the full conversation history:
+
+${state.plannerMessages.map(getMessageString).join("\n")}`;
 
   const response = await modelWithTools.invoke([
     {
@@ -58,7 +69,10 @@ export async function summarizer(
         ),
       ),
     },
-    ...state.plannerMessages,
+    {
+      role: "user",
+      content: conversationHistoryStr,
+    },
   ]);
 
   const toolCall = response.tool_calls?.[0];
@@ -70,9 +84,21 @@ export async function summarizer(
     tool_call_id: toolCall.id ?? "",
     name: toolCall.name,
     content: `Successfully summarized planning context.`,
+    additional_kwargs: {
+      summary_message: true,
+    },
   });
 
   return {
-    messages: [response, toolMessage],
+    messages: [
+      new AIMessage({
+        ...response,
+        additional_kwargs: {
+          ...response.additional_kwargs,
+          summary_message: true,
+        },
+      }),
+      toolMessage,
+    ],
   };
 }
