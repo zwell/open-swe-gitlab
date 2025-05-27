@@ -6,6 +6,33 @@ import { traceable } from "langsmith/traceable";
 
 const logger = createLogger(LogLevel.INFO, "ReadWriteUtil");
 
+async function handleCreateFile(
+  sandbox: Sandbox,
+  filePath: string,
+  args?: {
+    workDir?: string;
+  },
+) {
+  try {
+    const touchCommand = `touch "${filePath}"`;
+    const touchOutput = await sandbox.commands.run(touchCommand, {
+      cwd: args?.workDir,
+    });
+    return touchOutput;
+  } catch (e) {
+    const errorFields = getSandboxErrorFields(e);
+    if (errorFields) {
+      return errorFields;
+    }
+    return {
+      exitCode: 1,
+      error: e instanceof Error ? e.message : String(e),
+      stdout: "",
+      stderr: "",
+    };
+  }
+}
+
 async function readFileFunc(
   sandbox: Sandbox,
   filePath: string,
@@ -42,6 +69,19 @@ async function readFileFunc(
       output: readOutput.stdout,
     };
   } catch (e: any) {
+    if (e instanceof Error && e.message.includes("No such file or directory")) {
+      const createOutput = await handleCreateFile(sandbox, filePath, args);
+      if (createOutput.exitCode !== 0) {
+        return {
+          success: false,
+          output: `FAILED TO EXECUTE READ COMMAND for sandbox '${filePath}'. Error: ${(e as Error).message || String(e)}`,
+        };
+      } else {
+        // If the file was created successfully, try reading it again.
+        return readFile(sandbox, filePath, args);
+      }
+    }
+
     logger.error(
       `Exception while trying to read file '${filePath}' from sandbox via cat:`,
       {
