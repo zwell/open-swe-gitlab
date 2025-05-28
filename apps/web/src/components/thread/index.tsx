@@ -94,7 +94,7 @@ function OpenGitHubRepo() {
       <Tooltip>
         <TooltipTrigger asChild>
           <a
-            href="https://github.com/langchain-ai/agent-chat-ui"
+            href="https://github.com/langchain-ai/open-swe"
             target="_blank"
             className="flex items-center justify-center"
           >
@@ -228,6 +228,16 @@ export function Thread() {
             newHumanMessage,
           ],
         }),
+        config: {
+          // TODO: Make configurable (just that target_repository object) & recursion limit in the UI.
+          configurable: {
+            target_repository: {
+              owner: "langchain-ai",
+              repo: "open-swe",
+            },
+          },
+          recursion_limit: 400,
+        },
       },
     );
 
