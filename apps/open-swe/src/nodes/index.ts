@@ -6,4 +6,5 @@ export * from "./interrupt-plan.js";
 export * from "./progress-plan-step.js";
 export * from "./summarize-task-steps.js";
 export * from "./generate-conclusion.js";
+export * from "./open-pr.js";
 export * from "./diagnose-error.js";
