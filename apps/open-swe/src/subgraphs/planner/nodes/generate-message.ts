@@ -1,8 +1,12 @@
 import { loadModel, Task } from "../../../utils/load-model.js";
-import { shellTool, applyPatchTool } from "../../../tools/index.js";
+import { shellTool } from "../../../tools/index.js";
 import { PlannerGraphState, PlannerGraphUpdate } from "../types.js";
 import { GraphConfig } from "../../../types.js";
 import { isHumanMessage } from "@langchain/core/messages";
+import { createLogger, LogLevel } from "../../../utils/logger.js";
+import { getMessageContentString } from "../../../utils/message/content.js";
+
+const logger = createLogger(LogLevel.INFO, "GeneratePlanningMessageNode");
 
 const systemPrompt = `You are operating as a terminal-based agentic coding assistant built by LangChain. It wraps LLM models to enable natural language interaction with a local codebase. You are expected to be precise, safe, and helpful.
 
@@ -23,7 +27,7 @@ export async function generateAction(
   config: GraphConfig,
 ): Promise<PlannerGraphUpdate> {
   const model = await loadModel(config, Task.ACTION_GENERATOR);
-  const tools = [shellTool, applyPatchTool];
+  const tools = [shellTool];
   const modelWithTools = model.bindTools(tools, { tool_choice: "auto" });
 
   const firstUserMessage = state.messages.find(isHumanMessage);
@@ -38,6 +42,16 @@ export async function generateAction(
       ...(firstUserMessage ? [firstUserMessage] : []),
       ...state.plannerMessages,
     ]);
+
+  logger.info("Generated planning message", {
+    ...(response.tool_calls?.[0] && {
+      name: response.tool_calls?.[0].name,
+      args: response.tool_calls?.[0].args,
+    }),
+    ...(getMessageContentString(response.content) && {
+      content: getMessageContentString(response.content),
+    }),
+  });
 
   return {
     plannerMessages: [response],

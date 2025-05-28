@@ -5,6 +5,8 @@ import { getRepoAbsolutePath } from "../utils/git/index.js";
 import { formatPlanPrompt } from "../utils/plan-prompt.js";
 import { pauseSandbox } from "../utils/sandbox.js";
 import { createLogger, LogLevel } from "../utils/logger.js";
+import { getCurrentTask } from "../utils/current-task.js";
+import { getMessageContentString } from "../utils/message/content.js";
 
 const logger = createLogger(LogLevel.INFO, "GenerateMessageNode");
 
@@ -81,6 +83,7 @@ You MUST adhere to the following criteria when executing the task:
 - Always use \`rg\` instead of \`grep/ls -R\` because it is much faster and respects gitignore.
   - Always use glob patterns when searching with \`rg\` for specific file types. For example, to search for all TSX files, use \`rg -i star -g **/*.tsx project-directory/\`. This is because \`rg\` does not have built in file types for every language.
 - Only make changes to the existing Git repo ({REPO_DIRECTORY}). Any changes outside this repo will not be detected, so do not attempt to create new files or directories outside of this repo.
+- You do NOT have access to the \`set_task_status\` or \`diagnose_error\` tools. NEVER attempt to call them.
 
 Below, is a collection of useful context about the codebase. It is updated after each completed task, and is provided to you to help you make decisions, and avoid duplicate work:
 {CODEBASE_CONTEXT}
@@ -133,9 +136,16 @@ export async function generateAction(
   }
 
   logger.info("Generated action", {
-    name: response.tool_calls?.[0].name,
-    args: response.tool_calls?.[0].args,
+    currentTask: getCurrentTask(state.plan).plan,
+    ...(response.tool_calls?.[0] && {
+      name: response.tool_calls?.[0].name,
+      args: response.tool_calls?.[0].args,
+    }),
+    ...(getMessageContentString(response.content) && {
+      content: getMessageContentString(response.content),
+    }),
   });
+
   return {
     messages: [response],
     ...(newSandboxSessionId && { sandboxSessionId: newSandboxSessionId }),

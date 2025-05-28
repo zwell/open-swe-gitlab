@@ -1,10 +1,11 @@
 import { isAIMessage, ToolMessage } from "@langchain/core/messages";
-import { applyPatchTool, shellTool } from "../../../tools/index.js";
+import { shellTool } from "../../../tools/index.js";
 import { GraphConfig } from "../../../types.js";
 import { PlannerGraphState, PlannerGraphUpdate } from "../types.js";
 import { createLogger, LogLevel } from "../../../utils/logger.js";
 import { zodSchemaToString } from "../../../utils/zod-to-string.js";
 import { formatBadArgsError } from "../../../utils/zod-to-string.js";
+import { truncateOutput } from "../../../utils/truncate-outputs.js";
 
 const logger = createLogger(LogLevel.INFO, "TakeAction");
 
@@ -20,7 +21,6 @@ export async function takeAction(
   }
 
   const toolsMap = {
-    [applyPatchTool.name]: applyPatchTool,
     [shellTool.name]: shellTool,
   };
 
@@ -39,9 +39,12 @@ export async function takeAction(
   let result = "";
   let toolCallStatus: "success" | "error" = "success";
   try {
-    const toolResult: { result: string; status: "success" | "error" } =
+    const toolResult =
       // @ts-expect-error tool.invoke types are weird here...
-      await tool.invoke(toolCall.args);
+      (await tool.invoke(toolCall.args)) as {
+        result: string;
+        status: "success" | "error";
+      };
     result = toolResult.result;
     toolCallStatus = toolResult.status;
   } catch (e) {
@@ -68,7 +71,7 @@ export async function takeAction(
 
   const toolMessage = new ToolMessage({
     tool_call_id: toolCall.id ?? "",
-    content: result,
+    content: truncateOutput(result),
     name: toolCall.name,
     status: toolCallStatus,
   });
