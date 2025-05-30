@@ -83,11 +83,10 @@ export async function initialize(
     }
   }
 
-  const { target_repository } = config.configurable;
-
-  if (!target_repository) {
+  const { targetRepository } = state;
+  if (!targetRepository) {
     throw new Error(
-      "Missing required configuration. Please provide a git repository URL.",
+      "Missing required target repository. Please provide a git repository in state or configuration.",
     );
   }
 
@@ -97,7 +96,7 @@ export async function initialize(
     TIMEOUT_EXTENSION_OPT,
   );
 
-  const res = await cloneRepo(sandbox, target_repository);
+  const res = await cloneRepo(sandbox, targetRepository);
   if (res.error) {
     // TODO: This should probably be an interrupt.
     logger.error("Failed to clone repository", res.error);
@@ -105,7 +104,7 @@ export async function initialize(
   }
   logger.info("Repository cloned successfully.");
 
-  const absoluteRepoDir = getRepoAbsolutePath(config);
+  const absoluteRepoDir = getRepoAbsolutePath(targetRepository);
 
   logger.info(`Configuring git user for repository at "${absoluteRepoDir}"...`);
   await configureGitUserInRepo(absoluteRepoDir, sandbox);
@@ -125,5 +124,6 @@ export async function initialize(
 
   return {
     sandboxSessionId: sandbox.sandboxId,
+    targetRepository,
   };
 }

@@ -73,6 +73,12 @@ export const GraphAnnotation = z.object({
     .string()
     .optional()
     .langgraph.reducer((_state, update) => update),
+  /**
+   * The target repository information
+   */
+  targetRepository: z
+    .custom<TargetRepository>()
+    .langgraph.reducer((_state, update) => update),
 });
 
 export type GraphState = z.infer<typeof GraphAnnotation>;
@@ -143,25 +149,6 @@ const MODEL_OPTIONS_NO_THINKING = MODEL_OPTIONS.filter(
 );
 
 export const GraphConfiguration = z.object({
-  /**
-   * The URL of the repository to clone.
-   */
-  target_repository: z
-    .object({
-      owner: z.string(),
-      repo: z.string(),
-      branch: z.string().optional(),
-    })
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "json",
-        default: `{
-  "owner": "",
-  "repo": "",
-  "branch": ""
-}`,
-      },
-    }),
   /**
    * The model ID to use for the planning step.
    * This includes initial planning, and rewriting.
