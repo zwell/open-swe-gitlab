@@ -5,7 +5,7 @@ import {
   getBranchName,
   getChangedFilesStatus,
   getRepoAbsolutePath,
-} from "../utils/git/index.js";
+} from "../utils/git.js";
 import { createLogger, LogLevel } from "../utils/logger.js";
 import { z } from "zod";
 import { loadModel, Task } from "../utils/load-model.js";
@@ -13,6 +13,7 @@ import { formatPlanPromptWithSummaries } from "../utils/plan-prompt.js";
 import { isHumanMessage, ToolMessage } from "@langchain/core/messages";
 import { getMessageContentString } from "../utils/message/content.js";
 import { daytonaClient } from "../utils/sandbox.js";
+import { getGitHubTokensFromConfig } from "../utils/github-tokens.js";
 
 const logger = createLogger(LogLevel.INFO, "Open PR");
 
@@ -65,6 +66,7 @@ export async function openPullRequest(
       "Failed to open pull request: No sandbox session ID found in state.",
     );
   }
+  const { githubToken } = getGitHubTokensFromConfig(config);
 
   const sandbox = await daytonaClient().get(sandboxSessionId);
 
@@ -133,6 +135,7 @@ export async function openPullRequest(
     headBranch: branchName ?? getBranchName(config),
     title,
     body,
+    githubToken,
   });
 
   return {
