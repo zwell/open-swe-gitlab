@@ -306,7 +306,7 @@ export async function configureGitUserInRepo(
     }
 
     // Set user email - use fetched email or fallback to a generic noreply address
-    const emailToUse = userEmail || "open-swe-bot@noreply.github.com";
+    const emailToUse = userEmail || `${repo}-bot@noreply.github.com`;
     const configUserEmailOutput = await sandbox.process.executeCommand(
       `git config user.email "${emailToUse}"`,
       absoluteRepoDir,

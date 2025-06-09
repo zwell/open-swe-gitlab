@@ -1,11 +1,16 @@
 import "@langchain/langgraph/zod";
 import { z } from "zod";
 import {
-  addMessages,
   LangGraphRunnableConfig,
-  Messages,
-} from "@langchain/langgraph";
-import { BaseMessage } from "@langchain/core/messages";
+  MessagesZodState,
+} from "@langchain/langgraph/web";
+import { MODEL_OPTIONS, MODEL_OPTIONS_NO_THINKING } from "./models.js";
+import { ConfigurableFieldUIMetadata } from "../configurable-metadata.js";
+import {
+  uiMessageReducer,
+  type UIMessage,
+  type RemoveUIMessage,
+} from "@langchain/langgraph-sdk/react-ui";
 
 export type PlanItem = {
   /**
@@ -108,11 +113,7 @@ export type TargetRepository = {
   branch?: string;
 };
 
-export const GraphAnnotation = z.object({
-  messages: z
-    .custom<BaseMessage[]>()
-    .default(() => [])
-    .langgraph.reducer<Messages>((state, update) => addMessages(state, update)),
+export const GraphAnnotation = MessagesZodState.extend({
   proposedPlan: z
     .array(z.string())
     .default(() => [])
@@ -153,74 +154,147 @@ export const GraphAnnotation = z.object({
     .string()
     .default(() => "")
     .langgraph.reducer((_state, update) => update),
+  ui: z
+    .custom<UIMessage[]>()
+    .default(() => [])
+    .langgraph.reducer<(UIMessage | RemoveUIMessage)[]>((state, update) =>
+      uiMessageReducer(state, update),
+    ),
+  // TODO: Not used, but can be used in the future for Gen UI artifacts
+  context: z.record(z.string(), z.unknown()),
 });
 
 export type GraphState = z.infer<typeof GraphAnnotation>;
 export type GraphUpdate = Partial<GraphState>;
 
-const MODEL_OPTIONS = [
-  {
-    label: "Claude Sonnet 4 (Extended Thinking)",
-    value: "anthropic:extended-thinking:claude-sonnet-4-0",
+export const GraphConfigurationMetadata: {
+  [key: string]: {
+    x_open_swe_ui_config:
+      | Omit<ConfigurableFieldUIMetadata, "label">
+      | { type: "hidden" };
+  };
+} = {
+  plannerModelName: {
+    x_open_swe_ui_config: {
+      type: "select",
+      default: "anthropic:claude-sonnet-4-0",
+      description: "The model to use for planning",
+      options: MODEL_OPTIONS_NO_THINKING,
+    },
   },
-  {
-    label: "Claude Opus 4 (Extended Thinking)",
-    value: "anthropic:extended-thinking:claude-opus-4-0",
+  plannerTemperature: {
+    x_open_swe_ui_config: {
+      type: "slider",
+      default: 0,
+      min: 0,
+      max: 2,
+      step: 0.1,
+      description: "Controls randomness (0 = deterministic, 2 = creative)",
+    },
   },
-  {
-    label: "Claude Sonnet 4",
-    value: "anthropic:claude-sonnet-4-0",
+  plannerContextModelName: {
+    x_open_swe_ui_config: {
+      type: "select",
+      default: "anthropic:claude-sonnet-4-0",
+      description: "The model to use for planning",
+      options: MODEL_OPTIONS,
+    },
   },
-  {
-    label: "Claude Opus 4",
-    value: "anthropic:claude-opus-4-0",
+  plannerContextTemperature: {
+    x_open_swe_ui_config: {
+      type: "slider",
+      default: 0,
+      min: 0,
+      max: 2,
+      step: 0.1,
+      description: "Controls randomness (0 = deterministic, 2 = creative)",
+    },
   },
-  {
-    label: "Claude 3.7 Sonnet",
-    value: "anthropic:claude-3-7-sonnet-latest",
+  actionGeneratorModelName: {
+    x_open_swe_ui_config: {
+      type: "select",
+      default: "anthropic:claude-sonnet-4-0",
+      description: "The model to use for action generation",
+      options: MODEL_OPTIONS,
+    },
   },
-  {
-    label: "Claude 3.5 Sonnet",
-    value: "anthropic:claude-3-5-sonnet-latest",
+  actionGeneratorTemperature: {
+    x_open_swe_ui_config: {
+      type: "slider",
+      default: 0,
+      min: 0,
+      max: 2,
+      step: 0.1,
+      description: "Controls randomness (0 = deterministic, 2 = creative)",
+    },
   },
-  {
-    label: "o4",
-    value: "openai:o4",
+  progressPlanCheckerModelName: {
+    x_open_swe_ui_config: {
+      type: "select",
+      default: "anthropic:claude-sonnet-4-0",
+      description: "The model to use for progress plan checking",
+      options: MODEL_OPTIONS_NO_THINKING,
+    },
   },
-  {
-    label: "o4 mini",
-    value: "openai:o4-mini",
+  progressPlanCheckerTemperature: {
+    x_open_swe_ui_config: {
+      type: "slider",
+      default: 0,
+      min: 0,
+      max: 2,
+      step: 0.1,
+      description: "Controls randomness (0 = deterministic, 2 = creative)",
+    },
   },
-  {
-    label: "o3",
-    value: "openai:o3",
+  summarizerModelName: {
+    x_open_swe_ui_config: {
+      type: "select",
+      default: "anthropic:claude-sonnet-4-0",
+      description: "The model to use for summarizing the conversation history",
+      options: MODEL_OPTIONS_NO_THINKING,
+    },
   },
-  {
-    label: "o3 mini",
-    value: "openai:o3-mini",
+  summarizerTemperature: {
+    x_open_swe_ui_config: {
+      type: "slider",
+      default: 0,
+      min: 0,
+      max: 2,
+      step: 0.1,
+      description: "Controls randomness (0 = deterministic, 2 = creative)",
+    },
   },
-  {
-    label: "GPT 4o",
-    value: "openai:gpt-4o",
+  maxContextActions: {
+    x_open_swe_ui_config: {
+      type: "number",
+      default: 6,
+      min: 1,
+      max: 20,
+      description:
+        "Maximum number of context gathering actions during planning",
+    },
   },
-  {
-    label: "GPT 4.1",
-    value: "openai:gpt-4.1",
+  maxTokens: {
+    x_open_swe_ui_config: {
+      type: "number",
+      default: 10_000,
+      min: 1,
+      max: 64_000,
+      description:
+        "The maximum number of tokens to generate in an individual generation",
+    },
   },
-  {
-    label: "Gemini 2.5 Pro Preview",
-    value: "google-genai:gemini-2.5-pro-preview-05-06",
+  "x-github-installation-token": {
+    x_open_swe_ui_config: {
+      type: "hidden",
+    },
   },
-  {
-    label: "Gemini 2.5 Flash Preview",
-    value: "google-genai:gemini-2.5-flash-preview-05-20",
+  "x-github-access-token": {
+    x_open_swe_ui_config: {
+      type: "hidden",
+    },
   },
-];
-
-const MODEL_OPTIONS_NO_THINKING = MODEL_OPTIONS.filter(
-  ({ value }) =>
-    !value.includes("extended-thinking") || !value.startsWith("openai:o"),
-);
+};
 
 export const GraphConfiguration = z.object({
   /**
@@ -231,15 +305,7 @@ export const GraphConfiguration = z.object({
   plannerModelName: z
     .string()
     .optional()
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "select",
-        default: "anthropic:claude-sonnet-4-0",
-        description: "The model to use for planning",
-        // Do not show extended thinking models
-        options: MODEL_OPTIONS_NO_THINKING,
-      },
-    }),
+    .langgraph.metadata(GraphConfigurationMetadata.plannerModelName),
   /**
    * The temperature to use for the planning step.
    * This includes initial planning, and rewriting.
@@ -249,16 +315,7 @@ export const GraphConfiguration = z.object({
   plannerTemperature: z
     .number()
     .optional()
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "slider",
-        default: 0,
-        min: 0,
-        max: 2,
-        step: 0.1,
-        description: "Controls randomness (0 = deterministic, 2 = creative)",
-      },
-    }),
+    .langgraph.metadata(GraphConfigurationMetadata.plannerTemperature),
   /**
    * The model ID to use for the planning step.
    * This includes initial planning, and rewriting.
@@ -267,14 +324,7 @@ export const GraphConfiguration = z.object({
   plannerContextModelName: z
     .string()
     .optional()
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "select",
-        default: "anthropic:claude-sonnet-4-0",
-        description: "The model to use for planning",
-        options: MODEL_OPTIONS,
-      },
-    }),
+    .langgraph.metadata(GraphConfigurationMetadata.plannerContextModelName),
   /**
    * The temperature to use for the planning step.
    * This includes initial planning, and rewriting.
@@ -284,16 +334,7 @@ export const GraphConfiguration = z.object({
   plannerContextTemperature: z
     .number()
     .optional()
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "slider",
-        default: 0,
-        min: 0,
-        max: 2,
-        step: 0.1,
-        description: "Controls randomness (0 = deterministic, 2 = creative)",
-      },
-    }),
+    .langgraph.metadata(GraphConfigurationMetadata.plannerContextTemperature),
 
   /**
    * The model ID to use for action generation.
@@ -302,14 +343,7 @@ export const GraphConfiguration = z.object({
   actionGeneratorModelName: z
     .string()
     .optional()
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "select",
-        default: "anthropic:claude-sonnet-4-0",
-        description: "The model to use for action generation",
-        options: MODEL_OPTIONS,
-      },
-    }),
+    .langgraph.metadata(GraphConfigurationMetadata.actionGeneratorModelName),
   /**
    * The temperature to use for action generation.
    * If selecting a reasoning model, this will be ignored.
@@ -318,16 +352,7 @@ export const GraphConfiguration = z.object({
   actionGeneratorTemperature: z
     .number()
     .optional()
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "slider",
-        default: 0,
-        min: 0,
-        max: 2,
-        step: 0.1,
-        description: "Controls randomness (0 = deterministic, 2 = creative)",
-      },
-    }),
+    .langgraph.metadata(GraphConfigurationMetadata.actionGeneratorTemperature),
 
   /**
    * The model ID to use for progress plan checking.
@@ -336,14 +361,9 @@ export const GraphConfiguration = z.object({
   progressPlanCheckerModelName: z
     .string()
     .optional()
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "select",
-        default: "anthropic:claude-sonnet-4-0",
-        description: "The model to use for progress plan checking",
-        options: MODEL_OPTIONS_NO_THINKING,
-      },
-    }),
+    .langgraph.metadata(
+      GraphConfigurationMetadata.progressPlanCheckerModelName,
+    ),
   /**
    * The temperature to use for progress plan checking.
    * If selecting a reasoning model, this will be ignored.
@@ -352,16 +372,9 @@ export const GraphConfiguration = z.object({
   progressPlanCheckerTemperature: z
     .number()
     .optional()
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "slider",
-        default: 0,
-        min: 0,
-        max: 2,
-        step: 0.1,
-        description: "Controls randomness (0 = deterministic, 2 = creative)",
-      },
-    }),
+    .langgraph.metadata(
+      GraphConfigurationMetadata.progressPlanCheckerTemperature,
+    ),
 
   /**
    * The model ID to use for summarizing the conversation history.
@@ -370,15 +383,7 @@ export const GraphConfiguration = z.object({
   summarizerModelName: z
     .string()
     .optional()
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "select",
-        default: "anthropic:claude-sonnet-4-0",
-        description:
-          "The model to use for summarizing the conversation history",
-        options: MODEL_OPTIONS_NO_THINKING,
-      },
-    }),
+    .langgraph.metadata(GraphConfigurationMetadata.summarizerModelName),
   /**
    * The temperature to use for summarizing the conversation history.
    * If selecting a reasoning model, this will be ignored.
@@ -387,16 +392,7 @@ export const GraphConfiguration = z.object({
   summarizerTemperature: z
     .number()
     .optional()
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "slider",
-        default: 0,
-        min: 0,
-        max: 2,
-        step: 0.1,
-        description: "Controls randomness (0 = deterministic, 2 = creative)",
-      },
-    }),
+    .langgraph.metadata(GraphConfigurationMetadata.summarizerTemperature),
 
   /**
    * The maximum number of context gathering actions to take during planning.
@@ -407,16 +403,7 @@ export const GraphConfiguration = z.object({
   maxContextActions: z
     .number()
     .optional()
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "number",
-        default: 6,
-        min: 1,
-        max: 20,
-        description:
-          "Maximum number of context gathering actions during planning",
-      },
-    }),
+    .langgraph.metadata(GraphConfigurationMetadata.maxContextActions),
   /**
    * The maximum number of tokens to generate in an individual generation.
    * @default 10_000
@@ -425,38 +412,23 @@ export const GraphConfiguration = z.object({
     .number()
     .optional()
     .default(() => 10_000)
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "number",
-        default: 10_000,
-        min: 1,
-        max: 64_000,
-        description:
-          "The maximum number of tokens to generate in an individual generation",
-      },
-    }),
+    .langgraph.metadata(GraphConfigurationMetadata.maxTokens),
   /**
    * The user's GitHub installation token. To be used to take actions on behalf of the user.
    */
   "x-github-installation-token": z
     .string()
     .optional()
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "hidden",
-      },
-    }),
+    .langgraph.metadata(
+      GraphConfigurationMetadata["x-github-installation-token"],
+    ),
   /**
    * The user's GitHub access token. To be used in requests to get information about the user.
    */
   "x-github-access-token": z
     .string()
     .optional()
-    .langgraph.metadata({
-      x_oap_ui_config: {
-        type: "hidden",
-      },
-    }),
+    .langgraph.metadata(GraphConfigurationMetadata["x-github-access-token"]),
 });
 
 export type GraphConfig = LangGraphRunnableConfig<
