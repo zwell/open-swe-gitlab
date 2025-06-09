@@ -92,6 +92,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
 
   const [threads, setThreads] = useState<ThreadWithTasks[]>([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
+  const [busyThreadIds, setBusyThreadIds] = useState<string[]>([]);
 
   // Real-time thread updater for all properties (replaces polling)
   const updateThreadFromStream = useCallback(

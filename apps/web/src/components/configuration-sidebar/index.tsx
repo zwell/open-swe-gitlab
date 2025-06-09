@@ -8,10 +8,7 @@ import { useConfigStore } from "@/hooks/use-config-store";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import type {
-  ConfigurableFieldUIMetadata,
-  ConfigurableFieldUIType,
-} from "@open-swe/shared/configurable-metadata";
+import type { ConfigurableFieldUIMetadata } from "@open-swe/shared/configurable-metadata";
 import { Button } from "@/components/ui/button";
 import { PanelRightOpen } from "lucide-react";
 import { GraphConfigurationMetadata } from "@open-swe/shared/open-swe/types";

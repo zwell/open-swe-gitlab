@@ -52,6 +52,8 @@ import {
   TooltipTrigger,
 } from "../ui/tooltip";
 import { BaseMessage } from "@langchain/core/messages";
+import { TaskPlanView } from "../tasks";
+import { useTaskPlan } from "../tasks/use-task-plan";
 
 function StickyToBottomContent(props: {
   content: ReactNode;
@@ -100,6 +102,14 @@ export function Thread() {
   const [artifactOpen, closeArtifact] = useArtifactOpen();
   const { selectedRepository } = useGitHubApp();
   const { getConfigs } = useConfigStore();
+  const {
+    taskPlan,
+    handleTaskChange,
+    handleRevisionChange,
+    handleEditPlanItem,
+    handleAddPlanItem,
+    handleDeletePlanItem,
+  } = useTaskPlan();
 
   const [threadId, _setThreadId] = useQueryState("threadId");
   const [taskId, setTaskId] = useQueryState("taskId", parseAsString);
@@ -384,8 +394,8 @@ export function Thread() {
             </div>
           )}
           {chatStarted && (
-            <div className="relative z-10 flex items-center justify-between gap-3 p-2">
-              <div className="relative flex items-center justify-start gap-2">
+            <div className="relative z-10 grid grid-cols-10 items-start gap-3 p-2">
+              <div className="relative col-span-2 flex items-center justify-start gap-2">
                 <div className="absolute left-0 z-10">
                   {(!chatHistoryOpen || !isLargeScreen) && (
                     <Button
@@ -423,7 +433,20 @@ export function Thread() {
                 </motion.button>
               </div>
 
-              <div className="flex items-center gap-2 text-gray-700">
+              <div className="col-span-6 mx-auto flex w-sm justify-center md:w-md lg:w-lg xl:w-xl">
+                {taskPlan && (
+                  <TaskPlanView
+                    taskPlan={taskPlan}
+                    onTaskChange={handleTaskChange}
+                    onRevisionChange={handleRevisionChange}
+                    onEditPlanItem={handleEditPlanItem}
+                    onAddPlanItem={handleAddPlanItem}
+                    onDeletePlanItem={handleDeletePlanItem}
+                  />
+                )}
+              </div>
+
+              <div className="col-span-2 flex items-center justify-end gap-2 text-gray-700">
                 <GitHubOAuthButton />
                 <TooltipIconButton
                   tooltip="Configuration"
