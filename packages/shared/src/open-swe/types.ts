@@ -111,6 +111,7 @@ export type TargetRepository = {
   owner: string;
   repo: string;
   branch?: string;
+  baseCommit?: string;
 };
 
 export const GraphAnnotation = MessagesZodState.extend({
