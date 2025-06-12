@@ -1,33 +1,68 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQueryState } from "nuqs";
 import { Repository, getRepositoryBranches, Branch } from "@/utils/github";
 import type { TargetRepository } from "@open-swe/shared/open-swe/types";
 
 interface UseGitHubAppReturn {
+  // Installation and general state
   isInstalled: boolean | null;
   isLoading: boolean;
   error: string | null;
+
+  // Repository state and pagination
   repositories: Repository[];
+  repositoriesPage: number;
+  repositoriesHasMore: boolean;
+  repositoriesLoadingMore: boolean;
   refreshRepositories: () => Promise<void>;
+  loadMoreRepositories: () => Promise<void>;
+
+  // Repository selection
   selectedRepository: TargetRepository | null;
   setSelectedRepository: (repo: TargetRepository | null) => void;
+
+  // Branch state and pagination
   branches: Branch[];
+  branchesPage: number;
+  branchesHasMore: boolean;
   branchesLoading: boolean;
+  branchesLoadingMore: boolean;
   branchesError: string | null;
+  loadMoreBranches: () => Promise<void>;
+  fetchBranches: () => Promise<void>;
+  setBranchesPage: (page: number) => void;
+  setBranches: (branches: Branch[]) => void;
+
+  // Branch selection
   selectedBranch: string | null;
   setSelectedBranch: (branch: string | null) => void;
   refreshBranches: () => Promise<void>;
+
+  // Repository metadata
   defaultBranch: string | null;
 }
 
 export function useGitHubApp(): UseGitHubAppReturn {
+  // Installation and general state
   const [isInstalled, setIsInstalled] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Repository state and pagination
   const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [repositoriesPage, setRepositoriesPage] = useState(1);
+  const [repositoriesHasMore, setRepositoriesHasMore] = useState(false);
+  const [repositoriesLoadingMore, setRepositoriesLoadingMore] = useState(false);
+
+  // Branch state and pagination
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchesPage, setBranchesPage] = useState(1);
+  const [branchesHasMore, setBranchesHasMore] = useState(false);
   const [branchesLoading, setBranchesLoading] = useState(false);
+  const [branchesLoadingMore, setBranchesLoadingMore] = useState(false);
   const [branchesError, setBranchesError] = useState<string | null>(null);
+
+  // URL state management
   const [selectedRepositoryParam, setSelectedRepositoryParam] =
     useQueryState("repo");
   const [selectedBranchParam, setSelectedBranchParam] = useQueryState("branch");
@@ -35,24 +70,34 @@ export function useGitHubApp(): UseGitHubAppReturn {
   // Track if auto-selection has been attempted to prevent re-triggering
   const hasAutoSelectedRef = useRef(false);
 
-  const selectedRepository = selectedRepositoryParam
-    ? (() => {
-        try {
-          // Parse "owner/repo" format instead of JSON
-          const parts = selectedRepositoryParam.split("/");
-          if (parts.length === 2) {
-            return {
-              owner: parts[0],
-              repo: parts[1],
-              branch: selectedBranchParam || undefined,
-            } as TargetRepository;
-          }
-          return null;
-        } catch {
-          return null;
-        }
-      })()
-    : null;
+  const selectedRepository = useMemo(() => {
+    if (!selectedRepositoryParam) return null;
+    try {
+      // Parse "owner/repo" format instead of JSON
+      const parts = selectedRepositoryParam.split("/");
+      if (parts.length === 2) {
+        return {
+          owner: parts[0],
+          repo: parts[1],
+          branch: selectedBranchParam || undefined,
+        } as TargetRepository;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }, [selectedRepositoryParam, selectedBranchParam]);
+
+  useEffect(() => {
+    if (selectedRepository && !branchesLoading) {
+      fetchBranches();
+      // Reset branch pagination when repository changes
+      setBranchesPage(1);
+    } else if (!selectedRepository) {
+      setBranches([]);
+      setSelectedBranchParam(null);
+    }
+  }, [selectedRepository]);
 
   const selectedBranch = selectedBranchParam;
 
@@ -62,6 +107,8 @@ export function useGitHubApp(): UseGitHubAppReturn {
       if (!repo) {
         setSelectedBranchParam(null);
         setBranches([]);
+        setBranchesPage(1);
+        setBranchesHasMore(false);
       }
     },
     [setSelectedRepositoryParam, setSelectedBranchParam],
@@ -71,16 +118,29 @@ export function useGitHubApp(): UseGitHubAppReturn {
     setSelectedBranchParam(branch);
   };
 
-  const checkInstallation = async () => {
-    setIsLoading(true);
+  const checkInstallation = async (
+    page: number = 1,
+    append: boolean = false,
+  ) => {
+    if (!append) setIsLoading(true);
+    if (append) setRepositoriesLoadingMore(true);
     setError(null);
 
     try {
-      const response = await fetch("/api/github/repositories");
+      const response = await fetch(`/api/github/repositories?page=${page}`);
 
       if (response.ok) {
         const data = await response.json();
-        setRepositories(data.repositories || []);
+        const newRepositories = data.repositories || [];
+
+        if (append) {
+          setRepositories((prev) => [...prev, ...newRepositories]);
+        } else {
+          setRepositories(newRepositories);
+        }
+
+        setRepositoriesPage(data.pagination?.page || page);
+        setRepositoriesHasMore(data.pagination?.hasMore || false);
         setIsInstalled(true);
       } else {
         const errorData = await response.json();
@@ -95,55 +155,77 @@ export function useGitHubApp(): UseGitHubAppReturn {
       setError("Failed to check GitHub App installation status");
       setIsInstalled(false);
     } finally {
-      setIsLoading(false);
+      if (!append) setIsLoading(false);
+      if (append) setRepositoriesLoadingMore(false);
     }
   };
 
-  const fetchBranches = useCallback(async () => {
-    if (!selectedRepository) {
-      setBranches([]);
-      return;
-    }
+  const fetchBranches = useCallback(
+    async (page: number = 1, append: boolean = false) => {
+      if (!selectedRepository) {
+        setBranches([]);
+        setBranchesPage(1);
+        setBranchesHasMore(false);
+        return;
+      }
 
-    setBranchesLoading(true);
-    setBranchesError(null);
+      if (!append) setBranchesLoading(true);
+      if (append) setBranchesLoadingMore(true);
+      setBranchesError(null);
 
-    try {
-      const branchData = await getRepositoryBranches(
-        selectedRepository.owner,
-        selectedRepository.repo,
-      );
-      setBranches(branchData || []);
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to fetch branches";
-      console.error(
-        `Error fetching branches for ${selectedRepository.owner}/${selectedRepository.repo}:`,
-        err,
-      );
-      setBranchesError(errorMessage);
-    } finally {
-      setBranchesLoading(false);
+      try {
+        const branchData = await getRepositoryBranches(
+          selectedRepository.owner,
+          selectedRepository.repo,
+          page,
+        );
+
+        if (append) {
+          setBranches((prev) => {
+            // Avoid adding duplicates
+            const newBranches = branchData.branches.filter(
+              (branch) => !prev.some((b) => b.name === branch.name),
+            );
+            return [...prev, ...newBranches];
+          });
+        } else {
+          setBranches(branchData.branches);
+        }
+
+        setBranchesPage(page);
+        setBranchesHasMore(branchData.hasMore);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to fetch branches";
+        console.error(
+          `Error fetching branches for ${selectedRepository.owner}/${selectedRepository.repo}:`,
+          err,
+        );
+        setBranchesError(errorMessage);
+      } finally {
+        if (!append) setBranchesLoading(false);
+        if (append) setBranchesLoadingMore(false);
+      }
+    },
+    [selectedRepository?.owner, selectedRepository?.repo],
+  );
+
+  // Load more functions
+  const loadMoreRepositories = useCallback(async () => {
+    if (repositoriesHasMore && !repositoriesLoadingMore) {
+      await checkInstallation(repositoriesPage + 1, true);
     }
-  }, [selectedRepository?.owner, selectedRepository?.repo]);
+  }, [repositoriesHasMore, repositoriesLoadingMore, repositoriesPage]);
+
+  const loadMoreBranches = useCallback(async () => {
+    if (branchesHasMore && !branchesLoadingMore) {
+      await fetchBranches(branchesPage + 1, true);
+    }
+  }, [branchesHasMore, branchesLoadingMore, branchesPage, fetchBranches]);
 
   useEffect(() => {
     checkInstallation();
   }, []);
-
-  useEffect(() => {
-    if (selectedRepository) {
-      fetchBranches();
-    } else {
-      setBranches([]);
-      setSelectedBranchParam(null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    selectedRepository?.owner,
-    selectedRepository?.repo,
-    setSelectedBranchParam,
-  ]);
 
   // Auto-select first repository on initial page load
   useEffect(() => {
@@ -173,10 +255,16 @@ export function useGitHubApp(): UseGitHubAppReturn {
   ]);
 
   const refreshRepositories = async () => {
+    // Reset pagination state on refresh
+    setRepositoriesPage(1);
+    setRepositoriesHasMore(false);
     await checkInstallation();
   };
 
   const refreshBranches = async () => {
+    // Reset pagination state on refresh
+    setBranchesPage(1);
+    setBranchesHasMore(false);
     await fetchBranches();
   };
 
@@ -190,19 +278,41 @@ export function useGitHubApp(): UseGitHubAppReturn {
     : null;
 
   return {
+    // Installation and general state
     isInstalled,
     isLoading,
     error,
+
+    // Repository state and pagination
     repositories,
+    repositoriesPage,
+    repositoriesHasMore,
+    repositoriesLoadingMore,
     refreshRepositories,
+    loadMoreRepositories,
+
+    // Repository selection
     selectedRepository,
     setSelectedRepository,
+
+    // Branch state and pagination
     branches,
+    branchesPage,
+    branchesHasMore,
     branchesLoading,
+    branchesLoadingMore,
     branchesError,
+    loadMoreBranches,
+    fetchBranches,
+
+    // Branch selection
     selectedBranch,
     setSelectedBranch,
     refreshBranches,
+    setBranchesPage,
+    setBranches,
+
+    // Repository metadata
     defaultBranch,
   };
 }

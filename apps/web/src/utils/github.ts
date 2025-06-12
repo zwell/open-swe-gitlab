@@ -1,4 +1,3 @@
-import { GITHUB_TOKEN_COOKIE } from "@open-swe/shared/constants";
 import * as jwt from "jsonwebtoken";
 
 function getBaseApiUrl(): string {
@@ -41,7 +40,7 @@ export async function getInstallationToken(
       headers: {
         Authorization: `Bearer ${jwtToken}`,
         Accept: "application/vnd.github.v3+json",
-        "User-Agent": "YourAppName",
+        "User-Agent": "OpenSWE-Agent",
       },
     },
   );
@@ -62,17 +61,24 @@ export async function getInstallationToken(
  */
 export async function getInstallationRepositories(
   installationToken: string,
-): Promise<Repository[]> {
-  const response = await fetch(
-    "https://api.github.com/installation/repositories",
-    {
-      headers: {
-        Authorization: `Bearer ${installationToken}`,
-        Accept: "application/vnd.github.v3+json",
-        "User-Agent": "YourAppName",
-      },
+  page: number = 1,
+  perPage: number = 30,
+): Promise<{
+  repositories: Repository[];
+  hasMore: boolean;
+  totalCount: number;
+}> {
+  const url = new URL("https://api.github.com/installation/repositories");
+  url.searchParams.set("page", page.toString());
+  url.searchParams.set("per_page", perPage.toString());
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${installationToken}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "YourAppName",
     },
-  );
+  });
 
   if (!response.ok) {
     const errorData = await response.json();
@@ -82,7 +88,12 @@ export async function getInstallationRepositories(
   }
 
   const data = await response.json();
-  return data.repositories;
+
+  return {
+    repositories: data.repositories,
+    hasMore: data.repositories.length === perPage,
+    totalCount: data.total_count,
+  };
 }
 
 /**
@@ -91,11 +102,9 @@ export async function getInstallationRepositories(
 export async function getRepositoryBranches(
   owner: string,
   repo: string,
-): Promise<Branch[]> {
-  const allBranches: Branch[] = [];
-  let page = 1;
-  const perPage = 100; // Maximum allowed by GitHub API
-
+  page: number = 1,
+  perPage: number = 30,
+): Promise<{ branches: Branch[]; hasMore: boolean; totalCount?: number }> {
   // First, get repository info to ensure we have the default branch
 
   const repoResponse = await fetch(
@@ -114,52 +123,65 @@ export async function getRepositoryBranches(
     defaultBranch = repoData.default_branch;
   }
 
-  // Fetch all branches with pagination
-  while (true) {
-    const response = await fetch(
-      `${getBaseApiUrl()}github/proxy/repos/${owner}/${repo}/branches?per_page=${perPage}&page=${page}`,
-      {
-        headers: {
-          Accept: "application/vnd.github.v3+json",
-          "User-Agent": "OpenSWE-Agent",
-        },
+  // Fetch first 30 branches only
+  const response = await fetch(
+    `${getBaseApiUrl()}github/proxy/repos/${owner}/${repo}/branches?per_page=${perPage}&page=${page}`,
+    {
+      headers: {
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "OpenSWE-Agent",
       },
-    );
+    },
+  );
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Failed to fetch branches: ${JSON.stringify(errorData)}`);
-    }
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(`Failed to fetch branches: ${JSON.stringify(errorData)}`);
+  }
 
-    const data = await response.json();
+  const data = await response.json();
+  const branches: Branch[] = Array.isArray(data) ? data : [];
 
-    if (!Array.isArray(data) || data.length === 0) {
-      break;
-    }
-
-    allBranches.push(...data);
-
-    // If we got less than the requested amount, we've reached the end
-    if (data.length < perPage) {
-      break;
-    }
-
-    page++;
+  if (branches.length === 0) {
+    return { branches: [], hasMore: false };
   }
 
   // Ensure default branch is at the beginning if it exists
-  if (defaultBranch) {
-    const defaultBranchIndex = allBranches.findIndex(
+  if (defaultBranch && page === 1) {
+    const defaultBranchIndex = branches.findIndex(
       (branch) => branch.name === defaultBranch,
     );
     if (defaultBranchIndex > 0) {
-      const defaultBranchData = allBranches[defaultBranchIndex];
-      allBranches.splice(defaultBranchIndex, 1);
-      allBranches.unshift(defaultBranchData);
+      const defaultBranchData = branches[defaultBranchIndex];
+      branches.splice(defaultBranchIndex, 1);
+      branches.unshift(defaultBranchData);
+    } else {
+      // Need to fetch default branch
+      const defaultBranchResponse = await fetch(
+        `${getBaseApiUrl()}github/proxy/repos/${owner}/${repo}/branches/${defaultBranch}`,
+        {
+          headers: {
+            Accept: "application/vnd.github.v3+json",
+            "User-Agent": "OpenSWE-Agent",
+          },
+        },
+      );
+      if (!defaultBranchResponse.ok) {
+        const errorData = await defaultBranchResponse.json();
+        throw new Error(
+          `Failed to fetch default branch: ${JSON.stringify(errorData)}`,
+        );
+      }
+      const defaultBranchData = await defaultBranchResponse.json();
+      branches.unshift(defaultBranchData);
     }
   }
 
-  return allBranches;
+  return {
+    branches,
+    hasMore: branches.length >= perPage,
+    totalCount: branches.length,
+  };
 }
 
 /**

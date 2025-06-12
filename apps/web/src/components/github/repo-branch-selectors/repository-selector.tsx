@@ -16,7 +16,7 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import type { TargetRepository } from "@open-swe/shared/open-swe/types";
-import { useGitHubApp } from "@/hooks/useGitHubApp";
+import { useGitHubAppProvider } from "@/providers/GitHubApp";
 import type { Repository } from "@/utils/github";
 import { GitHubSVG } from "@/components/icons/github";
 
@@ -50,7 +50,10 @@ export function RepositorySelector({
     isLoading,
     error,
     isInstalled,
-  } = useGitHubApp();
+    repositoriesHasMore,
+    repositoriesLoadingMore,
+    loadMoreRepositories,
+  } = useGitHubAppProvider();
 
   const handleSelect = (repositoryKey: string) => {
     const repository = repositories.find(
@@ -210,6 +213,21 @@ export function RepositorySelector({
                 );
               })}
             </CommandGroup>
+            {repositoriesHasMore && (
+              <CommandGroup>
+                <CommandItem
+                  onSelect={() => {
+                    loadMoreRepositories();
+                  }}
+                  disabled={repositoriesLoadingMore}
+                  className="justify-center"
+                >
+                  {repositoriesLoadingMore
+                    ? "Loading more..."
+                    : "Load more repositories"}
+                </CommandItem>
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>
