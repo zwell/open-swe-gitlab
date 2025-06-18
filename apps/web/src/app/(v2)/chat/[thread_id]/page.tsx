@@ -29,7 +29,9 @@ export default function ThreadPage({
     reconnectOnMount: true,
   });
 
-  const { threads, threadsLoading } = useThreads<GraphState>();
+  const { threads, threadsLoading } = useThreads<GraphState>(
+    process.env.NEXT_PUBLIC_MANAGER_ASSISTANT_ID,
+  );
   // Find the thread by ID
   const thread = threads?.find((t) => t.thread_id === thread_id);
 
@@ -37,7 +39,7 @@ export default function ThreadPage({
     router.push("/chat");
   };
 
-  if (!thread || threadsLoading || !threadsLoading) {
+  if (!thread || threadsLoading) {
     return <ThreadViewLoading onBackToHome={handleBackToHome} />;
   }
 
@@ -46,17 +48,12 @@ export default function ThreadPage({
     threads?.map(threadToDisplayInfo) ?? [];
   const currentDisplayThread = threadToDisplayInfo(thread);
 
-  const handleThreadSelect = (selectedThread: ThreadDisplayInfo) => {
-    router.push(`/chat/${selectedThread.id}`);
-  };
-
   return (
-    <div className="h-screen bg-black">
+    <div className="bg-background fixed inset-0">
       <ThreadView
         stream={stream}
         displayThread={currentDisplayThread}
         allDisplayThreads={displayThreads}
-        onThreadSelect={handleThreadSelect}
         onBackToHome={handleBackToHome}
       />
     </div>
