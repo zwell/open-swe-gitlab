@@ -8,10 +8,7 @@ import { Button } from "../ui/button";
 import { Checkpoint, Message } from "@langchain/langgraph-sdk";
 import { AssistantMessage, AssistantMessageLoading } from "./messages/ai";
 import { HumanMessage } from "./messages/human";
-import {
-  DO_NOT_RENDER_ID_PREFIX,
-  ensureToolCallsHaveResponses,
-} from "@/lib/ensure-tool-responses";
+import { ensureToolCallsHaveResponses } from "@/lib/ensure-tool-responses";
 import { LangGraphLogoSVG } from "../icons/langgraph";
 import { TooltipIconButton } from "../ui/tooltip-icon-button";
 import {
@@ -52,6 +49,11 @@ import { TaskPlanView } from "../tasks";
 import { useTaskPlan } from "../tasks/useTaskPlan";
 import { isProposedPlanInterrupt } from "@/lib/plan-utils";
 import { HumanResponse } from "@langchain/langgraph/prebuilt";
+import {
+  INITIALIZE_NODE_ID,
+  mapCustomEventsToSteps,
+} from "@open-swe/shared/open-swe/custom-node-events";
+import { DO_NOT_RENDER_ID_PREFIX } from "@open-swe/shared/constants";
 
 function StickyToBottomContent(props: {
   content: ReactNode;
@@ -151,6 +153,7 @@ export function Thread() {
   const stream = useStreamContext();
   const messages = stream.messages;
   const isLoading = stream.isLoading;
+  const customEvents = stream.customEvents;
 
   const lastError = useRef<string | undefined>(undefined);
 
@@ -320,6 +323,19 @@ export function Thread() {
     (m) => m.type === "ai" || m.type === "tool",
   );
   const isLastMessageHuman = messages[messages.length - 1]?.type === "human";
+
+  const initializeEvents = customEvents.filter(
+    (e) => e.nodeId === INITIALIZE_NODE_ID,
+  );
+
+  const steps = mapCustomEventsToSteps(initializeEvents);
+  const allSuccess =
+    steps.length > 0 && steps.every((s) => s.status === "success");
+
+  let initStatus: "loading" | "generating" | "done" = "generating";
+  if (allSuccess) {
+    initStatus = "done";
+  }
 
   return (
     <div className="flex h-screen w-full overflow-hidden">
@@ -513,9 +529,11 @@ export function Thread() {
                         thread={stream}
                       />
                     )}
-                  {isLoading && !firstTokenReceived && (
-                    <AssistantMessageLoading />
-                  )}
+                  {isLoading &&
+                    !firstTokenReceived &&
+                    initializeEvents.length === 0 && (
+                      <AssistantMessageLoading />
+                    )}
                 </>
               }
               footer={

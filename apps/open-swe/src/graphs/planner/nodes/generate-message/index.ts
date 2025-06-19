@@ -14,6 +14,7 @@ import {
 import { SYSTEM_PROMPT } from "./prompt.js";
 import { getRepoAbsolutePath } from "@open-swe/shared/git";
 import { getMissingMessages } from "../../../../utils/github/issue-messages.js";
+import { filterHiddenMessages } from "../../../../utils/message/filter-hidden.js";
 import { getTaskPlanFromIssue } from "../../../../utils/github/issue-task.js";
 
 const logger = createLogger(LogLevel.INFO, "GeneratePlanningMessageNode");
@@ -62,7 +63,7 @@ export async function generateAction(
           taskPlan: latestTaskPlan ?? state.taskPlan,
         }),
       },
-      ...state.messages,
+      ...filterHiddenMessages(state.messages),
       ...missingMessages,
     ]);
 

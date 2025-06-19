@@ -16,6 +16,7 @@ import { PlannerGraphState } from "@open-swe/shared/open-swe/planner/types";
 import { ActionsRenderer } from "./actions-renderer";
 import { ThemeToggle } from "../theme-toggle";
 import { HumanMessage } from "@langchain/core/messages";
+import { DO_NOT_RENDER_ID_PREFIX } from "@open-swe/shared/constants";
 
 const PROGRAMMER_ASSISTANT_ID = process.env.NEXT_PUBLIC_PROGRAMMER_ASSISTANT_ID;
 const PLANNER_ASSISTANT_ID = process.env.NEXT_PUBLIC_PLANNER_ASSISTANT_ID;
@@ -52,12 +53,25 @@ export function ThreadView({
         id: uuidv4(),
         content: chatInput,
       });
-      stream.submit({
-        messages: [newHumanMessage],
-      });
+      stream.submit(
+        {
+          messages: [newHumanMessage],
+        },
+        {
+          streamResumable: true,
+          optimisticValues: (prev) => ({
+            ...prev,
+            messages: [...(prev.messages ?? []), newHumanMessage],
+          }),
+        },
+      );
       setChatInput("");
     }
   };
+
+  const filteredMessages = stream.messages.filter((message) => {
+    return !message.id?.startsWith(DO_NOT_RENDER_ID_PREFIX);
+  });
 
   return (
     <div className="bg-background flex h-screen flex-1 flex-col">
@@ -105,7 +119,7 @@ export function ThreadView({
         <div className="border-border bg-muted/30 flex h-full w-1/3 flex-col border-r dark:bg-gray-950">
           {/* Chat Messages */}
           <div className="flex-1 space-y-4 overflow-y-auto p-4">
-            {stream.messages.map((message) => (
+            {filteredMessages.map((message) => (
               <div
                 key={message.id}
                 className="flex gap-3"

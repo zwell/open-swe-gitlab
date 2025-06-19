@@ -23,6 +23,10 @@ import { Button } from "@/components/ui/button";
 import { GitHubSVG } from "@/components/icons/github";
 import { useGitHubToken } from "@/hooks/useGitHubToken";
 import { GraphState, GraphUpdate } from "@open-swe/shared/open-swe/types";
+import {
+  CustomNodeEvent,
+  isCustomNodeEvent,
+} from "@open-swe/shared/open-swe/custom-node-events";
 
 const useTypedStream = useStream<
   GraphState,
@@ -32,7 +36,9 @@ const useTypedStream = useStream<
   }
 >;
 
-type StreamContextType = ReturnType<typeof useTypedStream>;
+type StreamContextType = ReturnType<typeof useTypedStream> & {
+  customEvents: CustomNodeEvent[];
+};
 const StreamContext = createContext<StreamContextType | undefined>(undefined);
 
 async function sleep(ms = 4000) {
@@ -51,13 +57,17 @@ const StreamSession = ({
   githubToken: string;
 }) => {
   const [threadId, setThreadId] = useQueryState("threadId");
-  const { refreshThreads, setThreads } = useThreadsContext();
+  const [customEvents, setCustomEvents] = useState<CustomNodeEvent[]>([]);
+  const { refreshThreads } = useThreadsContext();
   const streamValue = useTypedStream({
     apiUrl,
     assistantId,
     reconnectOnMount: true,
     threadId: threadId ?? null,
     onCustomEvent: (event, options) => {
+      if (isCustomNodeEvent(event)) {
+        setCustomEvents((prev) => [...prev, event]);
+      }
       if (isUIMessage(event) || isRemoveUIMessage(event)) {
         options.mutate((prev) => {
           const ui = uiMessageReducer(prev.ui ?? [], event);
@@ -75,7 +85,12 @@ const StreamSession = ({
   });
 
   return (
-    <StreamContext.Provider value={streamValue}>
+    <StreamContext.Provider
+      value={{
+        ...streamValue,
+        customEvents,
+      }}
+    >
       {children}
     </StreamContext.Provider>
   );
