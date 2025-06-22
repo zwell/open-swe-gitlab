@@ -19,10 +19,12 @@ import { Fragment } from "react/jsx-runtime";
 import { useQueryState, parseAsBoolean } from "nuqs";
 import { Interrupt } from "./interrupt";
 import { ActionStep, ActionItemProps } from "@/components/gen-ui/action-step";
+import { TaskSummary } from "@/components/gen-ui/task-summary";
 import { ToolCall } from "@langchain/core/messages/tool";
 import {
   createApplyPatchToolFields,
   createShellToolFields,
+  createSetTaskStatusToolFields,
 } from "@open-swe/shared/open-swe/tools";
 import { z } from "zod";
 import { isAIMessageSDK, isToolMessageSDK } from "@/lib/langchain-messages";
@@ -34,6 +36,8 @@ const shellTool = createShellToolFields(dummyRepo);
 type ShellToolArgs = z.infer<typeof shellTool.schema>;
 const applyPatchTool = createApplyPatchToolFields(dummyRepo);
 type ApplyPatchToolArgs = z.infer<typeof applyPatchTool.schema>;
+const setTaskStatusTool = createSetTaskStatusToolFields();
+type SetTaskStatusToolArgs = z.infer<typeof setTaskStatusTool.schema>;
 
 function CustomComponent({
   message,
@@ -192,6 +196,32 @@ export function AssistantMessage({
         (tc) => tc.name === shellTool.name || tc.name === applyPatchTool.name,
       )
     : [];
+
+  const taskStatusToolCall = message
+    ? aiToolCalls.find((tc) => tc.name === setTaskStatusTool.name)
+    : undefined;
+
+  // We can be sure that if the task status tool call is present, it will be the
+  // only tool call/result we need to render for this message.
+  if (taskStatusToolCall) {
+    const args = taskStatusToolCall.args as SetTaskStatusToolArgs;
+    const correspondingToolResult = toolResults.find(
+      (tr) => tr && tr.tool_call_id === taskStatusToolCall.id,
+    );
+
+    const status = correspondingToolResult ? "done" : "generating";
+    const completed = args.task_status === "completed";
+
+    return (
+      <div className="flex flex-col gap-4">
+        <TaskSummary
+          status={status}
+          completed={completed}
+          summaryText={args.reasoning}
+        />
+      </div>
+    );
+  }
 
   if (shellOrPatchToolCalls.length > 0) {
     const actionItems = shellOrPatchToolCalls.map((toolCall) => {
