@@ -179,3 +179,28 @@ export function createSetTaskStatusToolFields() {
 
   return setTaskStatusTool;
 }
+
+export function createInstallDependenciesToolFields(
+  targetRepository: TargetRepository,
+) {
+  const repoRoot = getRepoAbsolutePath(targetRepository);
+
+  const installDependenciesToolSchema = z.object({
+    command: z
+      .array(z.string())
+      .describe("The command to run to install dependencies."),
+    workdir: z
+      .string()
+      .default(repoRoot)
+      .describe(
+        `The working directory to run the command in. The default working directory this command will be executed in is the root of the repository: \`${repoRoot}\`. If you want to execute this install command inside a different location, pass a path to this field.`,
+      ),
+  });
+
+  return {
+    name: "install_dependencies",
+    description:
+      "Installs dependencies for the repository. You should only call this tool if you need to install dependencies for a specific task. Ensure you only call this tool after gathering context on how to install dependencies, such as the package manager, proper install command, etc.",
+    schema: installDependenciesToolSchema,
+  };
+}
