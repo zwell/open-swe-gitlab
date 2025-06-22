@@ -15,6 +15,8 @@ import {
 import {
   createApplyPatchToolFields,
   createShellToolFields,
+  formatRgCommand,
+  RipgrepCommand,
 } from "@open-swe/shared/open-swe/tools";
 import { z } from "zod";
 
@@ -50,10 +52,18 @@ type PatchActionProps = BaseActionProps &
     fixedDiff?: string;
   };
 
+type RgActionProps = BaseActionProps &
+  Partial<RipgrepCommand> & {
+    actionType: "rg";
+    output?: string;
+    errorCode?: number;
+  };
+
 export type ActionItemProps =
   | (BaseActionProps & { status: "loading" })
   | ShellActionProps
-  | PatchActionProps;
+  | PatchActionProps
+  | RgActionProps;
 
 export type ActionStepProps = {
   actions: ActionItemProps[];
@@ -97,6 +107,8 @@ function ActionItem(props: ActionItemProps) {
         return props.success ? "Command completed" : "Command failed";
       } else if (props.actionType === "apply-patch") {
         return props.success ? "Patch applied" : "Patch failed";
+      } else if (props.actionType === "rg") {
+        return props.success ? "Search completed" : "Search failed";
       }
     }
 
@@ -107,7 +119,7 @@ function ActionItem(props: ActionItemProps) {
   const shouldShowToggle = () => {
     if (props.status !== "done") return false;
 
-    if (props.actionType === "shell") {
+    if (props.actionType === "shell" || props.actionType === "rg") {
       return !!props.output;
     } else if (props.actionType === "apply-patch") {
       return !!props.diff;
@@ -168,6 +180,25 @@ function ActionItem(props: ActionItemProps) {
           </code>
         </div>
       );
+    } else if (props.actionType === "rg") {
+      let formattedRgCommand = "";
+      try {
+        formattedRgCommand =
+          formatRgCommand({
+            pattern: props.pattern,
+            paths: props.paths,
+            flags: props.flags,
+          })?.join(" ") ?? "";
+      } catch {
+        // no-op
+      }
+      return (
+        <div className="flex-1">
+          <code className="text-foreground/80 text-xs font-normal">
+            {formattedRgCommand}
+          </code>
+        </div>
+      );
     } else {
       return (
         <code className="text-foreground/80 flex-1 text-xs font-normal">
@@ -183,7 +214,10 @@ function ActionItem(props: ActionItemProps) {
 
     if (!expanded) return null;
 
-    if (props.actionType === "shell" && props.output) {
+    if (
+      (props.actionType === "shell" || props.actionType === "rg") &&
+      props.output
+    ) {
       return (
         <div className="bg-muted text-foreground/90 overflow-x-auto p-2 dark:bg-gray-900">
           <pre className="text-xs font-normal whitespace-pre-wrap">
