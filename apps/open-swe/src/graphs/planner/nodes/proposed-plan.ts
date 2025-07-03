@@ -1,9 +1,11 @@
 import { v4 as uuidv4 } from "uuid";
+import { AIMessage, BaseMessage } from "@langchain/core/messages";
 import { Command, END, interrupt } from "@langchain/langgraph";
 import {
   GraphUpdate,
   GraphConfig,
   TaskPlan,
+  PlanItem,
 } from "@open-swe/shared/open-swe/types";
 import {
   ActionRequest,
@@ -20,6 +22,7 @@ import {
   GITHUB_USER_LOGIN_HEADER,
   PLAN_INTERRUPT_ACTION_TITLE,
   PLAN_INTERRUPT_DELIMITER,
+  DO_NOT_RENDER_ID_PREFIX,
   PROGRAMMER_GRAPH_ID,
 } from "@open-swe/shared/constants";
 import {
@@ -29,15 +32,50 @@ import {
 import { createLangGraphClient } from "../../../utils/langgraph-client.js";
 import { addTaskPlanToIssue } from "../../../utils/github/issue-task.js";
 import { createLogger, LogLevel } from "../../../utils/logger.js";
+import {
+  ACCEPTED_PLAN_NODE_ID,
+  CustomNodeEvent,
+} from "@open-swe/shared/open-swe/custom-node-events";
 
 const logger = createLogger(LogLevel.INFO, "ProposedPlan");
+
+function createAcceptedPlanMessage(input: {
+  planTitle: string;
+  planItems: PlanItem[];
+  interruptType: HumanResponse["type"];
+}) {
+  const { planTitle, planItems, interruptType } = input;
+  const acceptedPlanEvent: CustomNodeEvent = {
+    nodeId: ACCEPTED_PLAN_NODE_ID,
+    actionId: uuidv4(),
+    action: "Plan accepted",
+    createdAt: new Date().toISOString(),
+    data: {
+      status: "success",
+      planTitle,
+      planItems,
+      interruptType,
+    },
+  };
+
+  const acceptedPlanMessage = new AIMessage({
+    id: `${DO_NOT_RENDER_ID_PREFIX}${uuidv4()}`,
+    content: "",
+    additional_kwargs: {
+      hidden: true,
+      customNodeEvents: [acceptedPlanEvent],
+    },
+  });
+  return acceptedPlanMessage;
+}
 
 async function startProgrammerRun(input: {
   runInput: Exclude<GraphUpdate, "taskPlan"> & { taskPlan: TaskPlan };
   state: PlannerGraphState;
   config: GraphConfig;
+  newMessages?: BaseMessage[];
 }) {
-  const { runInput, state, config } = input;
+  const { runInput, state, config, newMessages } = input;
   const langGraphClient = createLangGraphClient({
     defaultHeaders: {
       [GITHUB_TOKEN_COOKIE]: config.configurable?.[GITHUB_TOKEN_COOKIE] ?? "",
@@ -83,6 +121,7 @@ async function startProgrammerRun(input: {
     },
     sandboxSessionId: runInput.sandboxSessionId,
     taskPlan: runInput.taskPlan,
+    messages: newMessages,
   };
 }
 
@@ -95,6 +134,7 @@ export async function interruptProposedPlan(
     throw new Error("No proposed plan found.");
   }
 
+  let planItems: PlanItem[];
   const userRequest = getUserRequest(state.messages);
   const runInput: GraphUpdate = {
     contextGatheringNotes: state.contextGatheringNotes,
@@ -105,7 +145,7 @@ export async function interruptProposedPlan(
 
   if (state.autoAcceptPlan) {
     logger.info("Auto accepting plan.");
-    const planItems = proposedPlan.map((p, index) => ({
+    planItems = proposedPlan.map((p, index) => ({
       index,
       plan: p,
       completed: false,
@@ -123,6 +163,13 @@ export async function interruptProposedPlan(
       },
       state,
       config,
+      newMessages: [
+        createAcceptedPlanMessage({
+          planTitle: state.proposedPlanTitle,
+          planItems,
+          interruptType: "accept",
+        }),
+      ],
     });
   }
 
@@ -161,7 +208,7 @@ export async function interruptProposedPlan(
   }
 
   if (interruptRes.type === "accept") {
-    const planItems = proposedPlan.map((p, index) => ({
+    planItems = proposedPlan.map((p, index) => ({
       index,
       plan: p,
       completed: false,
@@ -178,7 +225,7 @@ export async function interruptProposedPlan(
       .split(PLAN_INTERRUPT_DELIMITER)
       .map((step: string) => step.trim());
 
-    const planItems = editedPlan.map((p: string, index: number) => ({
+    planItems = editedPlan.map((p: string, index: number) => ({
       index,
       plan: p,
       completed: false,
@@ -200,5 +247,12 @@ export async function interruptProposedPlan(
     },
     state,
     config,
+    newMessages: [
+      createAcceptedPlanMessage({
+        planTitle: state.proposedPlanTitle,
+        planItems,
+        interruptType: interruptRes.type,
+      }),
+    ],
   });
 }
