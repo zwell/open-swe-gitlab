@@ -19,6 +19,7 @@ import {
   getChangedFilesStatus,
   stashAndClearChanges,
 } from "../../../utils/github/git.js";
+import { createFindInstancesOfTool } from "../../../tools/find-instances-of.js";
 import { getRepoAbsolutePath } from "@open-swe/shared/git";
 import { daytonaClient } from "../../../utils/sandbox.js";
 import { createPlannerNotesTool } from "../../../tools/planner-notes.js";
@@ -40,8 +41,8 @@ export async function takeActions(
   const shellTool = createShellTool(state);
   const rgTool = createRgTool(state);
   const plannerNotesTool = createPlannerNotesTool();
+  const findInstancesOfTool = createFindInstancesOfTool(state);
   const getURLContentTool = createGetURLContentTool();
-
   const mcpTools = await getMcpTools(config);
 
   const allTools = [
@@ -49,6 +50,7 @@ export async function takeActions(
     rgTool,
     plannerNotesTool,
     getURLContentTool,
+    findInstancesOfTool,
     ...mcpTools,
   ];
   const toolsMap = Object.fromEntries(
