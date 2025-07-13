@@ -27,7 +27,8 @@ import { ToolCall } from "@langchain/core/messages/tool";
 import {
   createApplyPatchToolFields,
   createShellToolFields,
-  createSetTaskStatusToolFields,
+  createMarkTaskCompletedToolFields,
+  createMarkTaskNotCompletedToolFields,
   createRgToolFields,
   createOpenPrToolFields,
   createInstallDependenciesToolFields,
@@ -36,10 +37,12 @@ import {
   createGetURLContentToolFields,
   createFindInstancesOfToolFields,
   createWriteTechnicalNotesToolFields,
+  createConversationHistorySummaryToolFields,
 } from "@open-swe/shared/open-swe/tools";
 import { z } from "zod";
 import { isAIMessageSDK, isToolMessageSDK } from "@/lib/langchain-messages";
 import { useStream } from "@langchain/langgraph-sdk/react";
+import { ConversationHistorySummary } from "@/components/gen-ui/conversation-summary";
 
 // Used only for Zod type inference.
 const dummyRepo = { owner: "dummy", repo: "dummy" };
@@ -47,8 +50,12 @@ const shellTool = createShellToolFields(dummyRepo);
 type ShellToolArgs = z.infer<typeof shellTool.schema>;
 const applyPatchTool = createApplyPatchToolFields(dummyRepo);
 type ApplyPatchToolArgs = z.infer<typeof applyPatchTool.schema>;
-const setTaskStatusTool = createSetTaskStatusToolFields();
-type SetTaskStatusToolArgs = z.infer<typeof setTaskStatusTool.schema>;
+const markTaskCompletedTool = createMarkTaskCompletedToolFields();
+type MarkTaskCompletedToolArgs = z.infer<typeof markTaskCompletedTool.schema>;
+const markTaskNotCompletedTool = createMarkTaskNotCompletedToolFields();
+type MarkTaskNotCompletedToolArgs = z.infer<
+  typeof markTaskNotCompletedTool.schema
+>;
 const rgTool = createRgToolFields(dummyRepo);
 type RgToolArgs = z.infer<typeof rgTool.schema>;
 const openPrTool = createOpenPrToolFields();
@@ -72,6 +79,12 @@ type FindInstancesOfToolArgs = z.infer<typeof findInstancesOfTool.schema>;
 const writeTechnicalNotesTool = createWriteTechnicalNotesToolFields();
 type WriteTechnicalNotesToolArgs = z.infer<
   typeof writeTechnicalNotesTool.schema
+>;
+
+const conversationHistorySummaryTool =
+  createConversationHistorySummaryToolFields();
+type ConversationHistorySummaryToolArgs = z.infer<
+  typeof conversationHistorySummaryTool.schema
 >;
 
 function CustomComponent({
@@ -300,8 +313,12 @@ export function AssistantMessage({
       )
     : [];
 
-  const taskStatusToolCall = message
-    ? aiToolCalls.find((tc) => tc.name === setTaskStatusTool.name)
+  const markTaskCompletedToolCall = message
+    ? aiToolCalls.find((tc) => tc.name === markTaskCompletedTool.name)
+    : undefined;
+
+  const markTaskNotCompletedToolCall = message
+    ? aiToolCalls.find((tc) => tc.name === markTaskNotCompletedTool.name)
     : undefined;
 
   const openPrToolCall = message
@@ -316,23 +333,49 @@ export function AssistantMessage({
     ? aiToolCalls.find((tc) => tc.name === writeTechnicalNotesTool.name)
     : undefined;
 
-  // We can be sure that if the task status tool call is present, it will be the
+  const conversationHistorySummaryToolCall = message
+    ? aiToolCalls.find((tc) => tc.name === conversationHistorySummaryTool.name)
+    : undefined;
+
+  // Check if this is a conversation history summary message
+  if (conversationHistorySummaryToolCall && aiToolCalls.length === 1) {
+    const args =
+      conversationHistorySummaryToolCall.args as ConversationHistorySummaryToolArgs;
+
+    return (
+      <div className="flex flex-col gap-4">
+        <ConversationHistorySummary
+          summary={args.conversation_history_summary}
+        />
+      </div>
+    );
+  }
+
+  // We can be sure that if either task status tool call is present, it will be the
   // only tool call/result we need to render for this message.
-  if (taskStatusToolCall) {
-    const args = taskStatusToolCall.args as SetTaskStatusToolArgs;
+  if (markTaskCompletedToolCall || markTaskNotCompletedToolCall) {
+    const toolCall = markTaskCompletedToolCall || markTaskNotCompletedToolCall;
+    const completed = !!markTaskCompletedToolCall;
+
     const correspondingToolResult = toolResults.find(
-      (tr) => tr && tr.tool_call_id === taskStatusToolCall.id,
+      (tr) => tr && tr.tool_call_id === toolCall!.id,
     );
 
     const status = correspondingToolResult ? "done" : "generating";
-    const completed = args.task_status === "completed";
+
+    // Get the appropriate summary text based on which tool was called
+    const summaryText = markTaskCompletedToolCall
+      ? (markTaskCompletedToolCall.args as MarkTaskCompletedToolArgs)
+          .completed_task_summary
+      : (markTaskNotCompletedToolCall!.args as MarkTaskNotCompletedToolArgs)
+          .reasoning;
 
     return (
       <div className="flex flex-col gap-4">
         <TaskSummary
           status={status}
           completed={completed}
-          summaryText={args.reasoning}
+          summaryText={summaryText}
         />
       </div>
     );
