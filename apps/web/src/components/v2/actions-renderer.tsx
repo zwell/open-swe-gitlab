@@ -1,7 +1,14 @@
 import { isAIMessageSDK, isHumanMessageSDK } from "@/lib/langchain-messages";
 import { UseStream, useStream } from "@langchain/langgraph-sdk/react";
 import { AssistantMessage } from "../thread/messages/ai";
-import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
+import {
+  Dispatch,
+  SetStateAction,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ManagerGraphState } from "@open-swe/shared/open-swe/manager/types";
 import { useCancelStream } from "@/hooks/useCancelStream";
 import {
@@ -130,12 +137,20 @@ export function ActionsRenderer<State extends PlannerGraphState | GraphState>({
     streamName: graphId === "planner" ? "Planner" : "Programmer",
   });
 
-  const initializeEvents = customNodeEvents.filter(
-    (e) => e.nodeId === INITIALIZE_NODE_ID,
+  const initializeEvents = useMemo(
+    () =>
+      customNodeEvents.filter(
+        (e) => e.nodeId === INITIALIZE_NODE_ID && e.data.runId === runId,
+      ),
+    [customNodeEvents, runId],
   );
 
-  const acceptedPlanEvents = customNodeEvents.filter(
-    (e) => e.nodeId === ACCEPTED_PLAN_NODE_ID,
+  const acceptedPlanEvents = useMemo(
+    () =>
+      customNodeEvents.filter(
+        (e) => e.nodeId === ACCEPTED_PLAN_NODE_ID && e.data.runId === runId,
+      ),
+    [customNodeEvents, runId],
   );
 
   const steps = mapCustomEventsToSteps(initializeEvents);
@@ -243,10 +258,6 @@ export function ActionsRenderer<State extends PlannerGraphState | GraphState>({
     }
   }, [stream.values, graphId]);
 
-  useEffect(() => {
-    console.log(stream.messages);
-  }, [stream.messages]);
-
   if (streamLoading) {
     return <LoadingActionsCardContent />;
   }
@@ -258,7 +269,6 @@ export function ActionsRenderer<State extends PlannerGraphState | GraphState>({
           status={initStatus}
           steps={steps}
           success={allSuccess}
-          collapse={initStatus === "done" && allSuccess}
         />
       )}
       {filteredMessages?.map((m) => (
@@ -274,9 +284,16 @@ export function ActionsRenderer<State extends PlannerGraphState | GraphState>({
       {acceptedPlanEvents.length > 0 &&
         isAcceptedPlanEvents(acceptedPlanEvents) && (
           <AcceptedPlanStep
-            planTitle={acceptedPlanEvents[0].data.planTitle}
-            planItems={acceptedPlanEvents[0].data.planItems}
-            interruptType={acceptedPlanEvents[0].data.interruptType}
+            planTitle={
+              acceptedPlanEvents[acceptedPlanEvents.length - 1].data.planTitle
+            }
+            planItems={
+              acceptedPlanEvents[acceptedPlanEvents.length - 1].data.planItems
+            }
+            interruptType={
+              acceptedPlanEvents[acceptedPlanEvents.length - 1].data
+                .interruptType
+            }
           />
         )}
       {/* If the last message is hidden, but there's an interrupt, we must manually render the interrupt */}
