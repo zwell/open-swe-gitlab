@@ -28,6 +28,7 @@ import { Command } from "@langchain/langgraph";
 import { shouldDiagnoseError } from "../../../utils/tool-message-error.js";
 import { filterHiddenMessages } from "../../../utils/message/filter-hidden.js";
 import { getGitHubTokensFromConfig } from "../../../utils/github-tokens.js";
+import { createScratchpadTool } from "../../../tools/scratchpad.js";
 import { getActiveTask } from "@open-swe/shared/open-swe/tasks";
 import { createPullRequestToolCallMessage } from "../../../utils/message/create-pr-message.js";
 
@@ -47,7 +48,13 @@ export async function takeReviewerActions(
   const shellTool = createShellTool(state);
   const searchTool = createSearchTool(state);
   const installDependenciesTool = createInstallDependenciesTool(state);
-  const allTools = [shellTool, searchTool, installDependenciesTool];
+  const scratchpadTool = createScratchpadTool("");
+  const allTools = [
+    shellTool,
+    searchTool,
+    installDependenciesTool,
+    scratchpadTool,
+  ];
   const toolsMap = Object.fromEntries(
     allTools.map((tool) => [tool.name, tool]),
   );
@@ -98,11 +105,13 @@ export async function takeReviewerActions(
           result: string;
           status: "success" | "error";
         };
+
       result = toolResult.result;
-      if (!result) {
-        result = toolResult.status;
-      }
       toolCallStatus = toolResult.status;
+
+      if (!result) {
+        result = toolCallStatus;
+      }
     } catch (e) {
       toolCallStatus = "error";
       if (
