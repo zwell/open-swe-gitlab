@@ -1,4 +1,5 @@
 import {
+  getModelManager,
   loadModel,
   supportsParallelToolCallsParam,
   Task,
@@ -112,6 +113,8 @@ export async function generateReviewActions(
   config: GraphConfig,
 ): Promise<ReviewerGraphUpdate> {
   const model = await loadModel(config, Task.PROGRAMMER);
+  const modelManager = getModelManager();
+  const modelName = modelManager.getModelNameForTask(config, Task.PROGRAMMER);
   const modelSupportsParallelToolCallsParam = supportsParallelToolCallsParam(
     config,
     Task.PROGRAMMER,
@@ -166,6 +169,6 @@ export async function generateReviewActions(
   return {
     messages: [response],
     reviewerMessages: [response],
-    tokenData: trackCachePerformance(response),
+    tokenData: trackCachePerformance(response, modelName),
   };
 }
