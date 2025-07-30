@@ -11,7 +11,6 @@ import {
 import {
   calculateConversationHistoryTokenCount,
   getMessagesSinceLastSummary,
-  MAX_INTERNAL_TOKENS,
 } from "../utils/tokens.js";
 import { GraphState } from "@open-swe/shared/open-swe/types";
 
@@ -767,11 +766,5 @@ describe("getMessagesSinceLastSummary", () => {
       (m) => m.id === expectedToolMessageId,
     );
     expect(toolMessageExists).not.toBeDefined();
-  });
-});
-
-describe("MAX_INTERNAL_TOKENS constant", () => {
-  it("should be defined as 100,000", async () => {
-    expect(MAX_INTERNAL_TOKENS).toBe(100_000);
   });
 });
