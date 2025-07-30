@@ -1,7 +1,7 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { FilePlus2, Archive, Zap } from "lucide-react";
+import { FilePlus2, Archive, ListChecks } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TerminalInput } from "./terminal-input";
 import { useFileUpload } from "@/hooks/useFileUpload";
@@ -209,7 +209,7 @@ export function DefaultView({ threads, threadsLoading }: DefaultViewProps) {
                     onClick={() => setAutoAccept((prev) => !prev)}
                     side="bottom"
                   >
-                    <Zap className="size-4" />
+                    <ListChecks className="size-4" />
                   </TooltipIconButton>
                 </div>
               </div>
