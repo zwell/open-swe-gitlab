@@ -300,6 +300,11 @@ export async function classifyMessage(
           command: {
             resume: plannerResume,
           },
+          metadata: {
+            source: "manager:classify_message_resume_planner",
+            owner: state.targetRepository?.owner,
+            repo: state.targetRepository?.repo,
+          },
           streamMode: OPEN_SWE_STREAM_MODE as StreamMode[],
         },
       );

@@ -234,7 +234,14 @@ const App: React.FC = () => {
         };
         await client.runs.create(threadId, MANAGER_GRAPH_ID, {
           input: interruptInput,
-          config: { recursion_limit: 400 },
+          metadata: {
+            source: "cli:resume_interrupt",
+            owner,
+            repo: repoName,
+          },
+          config: {
+            recursion_limit: 400,
+          },
           ifNotExists: "create",
           streamResumable: true,
           multitaskStrategy: "enqueue",
