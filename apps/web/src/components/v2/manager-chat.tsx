@@ -13,6 +13,7 @@ import { BasicMarkdownText } from "../thread/markdown-text";
 import { ErrorState } from "./types";
 import { CollapsibleAlert } from "./collapsible-alert";
 import { Loader2 } from "lucide-react";
+import { parsePartialJson } from "@langchain/core/output_parsers";
 
 function MessageCopyButton({ content }: { content: string }) {
   const [copied, setCopied] = useState(false);
@@ -82,6 +83,23 @@ function extractResponseFromMessage(message: Message): string {
   if (!isAIMessageSDK(message)) {
     return getMessageContentString(message.content);
   }
+  if (
+    Array.isArray(message.content) &&
+    ["input_json_delta", "tool_use"].includes(
+      message.content[0].type as string,
+    ) &&
+    "input" in message.content[0] &&
+    message.content[0].input
+  ) {
+    try {
+      const parsedJson = parsePartialJson(message.content[0].input as string);
+      if (parsedJson.response) {
+        return parsedJson.response;
+      }
+    } catch {
+      // no-op
+    }
+  }
   const toolCall = message.tool_calls?.[0];
   const response = toolCall?.args?.response;
 
@@ -89,6 +107,50 @@ function extractResponseFromMessage(message: Message): string {
     return getMessageContentString(message.content);
   }
   return response;
+}
+
+function LoadingMessageDots() {
+  return (
+    <div className="text-foreground flex items-center space-x-1 overflow-x-hidden text-sm">
+      <style jsx>{`
+        @keyframes dotBounce {
+          0%,
+          80%,
+          100% {
+            transform: scale(0.8);
+            opacity: 0.5;
+          }
+          40% {
+            transform: scale(1.2);
+            opacity: 1;
+          }
+        }
+        .dot-bounce {
+          animation: dotBounce 1.4s infinite ease-in-out;
+        }
+      `}</style>
+      <div className="flex space-x-1">
+        <div
+          className="dot-bounce h-1 w-1 rounded-full bg-current"
+          style={{
+            animationDelay: "0ms",
+          }}
+        />
+        <div
+          className="dot-bounce h-1 w-1 rounded-full bg-current"
+          style={{
+            animationDelay: "200ms",
+          }}
+        />
+        <div
+          className="dot-bounce h-1 w-1 rounded-full bg-current"
+          style={{
+            animationDelay: "400ms",
+          }}
+        />
+      </div>
+    </div>
+  );
 }
 
 export function ManagerChat({
@@ -153,9 +215,13 @@ export function ManagerChat({
                             <MessageCopyButton content={messageContentString} />
                           </div>
                         </div>
-                        <BasicMarkdownText className="text-foreground overflow-x-hidden text-sm">
-                          {messageContentString}
-                        </BasicMarkdownText>
+                        {messageContentString ? (
+                          <BasicMarkdownText className="text-foreground overflow-x-hidden text-sm">
+                            {messageContentString}
+                          </BasicMarkdownText>
+                        ) : (
+                          <LoadingMessageDots />
+                        )}
                       </div>
                     </div>
                   );
