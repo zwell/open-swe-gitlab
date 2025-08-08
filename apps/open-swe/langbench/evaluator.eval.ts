@@ -145,20 +145,6 @@ async function runOpenSWEWithStreamTracking(inputs: {
     }
 
     const managerState = managerRun as unknown as ManagerGraphState;
-    while (true) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const managerState = managerRun as unknown as ManagerGraphState;
-      if (managerState?.plannerSession) {
-        logger.info("Planner session found", {
-          plannerSession: managerState.plannerSession,
-        });
-        break;
-      } else {
-        logger.info("Planner session not found", {
-          managerState,
-        });
-      }
-    }
     const plannerSession = managerState?.plannerSession;
 
     if (!plannerSession) {
