@@ -12,7 +12,7 @@ import { PRData, PRProcessResult, OpenSWEStreamResults } from "./types.js";
 import { createPRFixPrompt } from "./prompts.js";
 import { runPytestOnFiles } from "./utils.js";
 import { v4 as uuidv4 } from "uuid";
-import { MANAGER_GRAPH_ID, GITHUB_PAT } from "@open-swe/shared/constants";
+import { MANAGER_GRAPH_ID, GITHUB_PAT, GITHUB_INSTALLATION_ID } from "@open-swe/shared/constants";
 import { createLangGraphClient } from "../src/utils/langgraph-client.js";
 import { encryptSecret } from "@open-swe/shared/crypto";
 import { ManagerGraphState } from "@open-swe/shared/open-swe/manager/types";
@@ -93,10 +93,11 @@ async function runOpenSWEWithStreamTracking(inputs: {
   try {
     const encryptionKey = process.env.SECRETS_ENCRYPTION_KEY;
     const githubPat = process.env.GITHUB_PAT;
+    const githubInstallationId = process.env.GITHUB_INSTALLATION_ID;
 
-    if (!encryptionKey || !githubPat) {
+    if (!encryptionKey || !githubPat || !githubInstallationId) {
       throw new Error(
-        "SECRETS_ENCRYPTION_KEY and GITHUB_PAT environment variables are required"
+        "SECRETS_ENCRYPTION_KEY, GITHUB_PAT, and GITHUB_INSTALLATION_ID environment variables are required"
       );
     }
 
@@ -104,7 +105,10 @@ async function runOpenSWEWithStreamTracking(inputs: {
 
     const lgClient = createLangGraphClient({
       includeApiKey: true,
-      defaultHeaders: { [GITHUB_PAT]: encryptedGitHubToken },
+      defaultHeaders: { 
+        [GITHUB_PAT]: encryptedGitHubToken,
+        [GITHUB_INSTALLATION_ID]: githubInstallationId,
+      },
     });
 
     const input = await formatOpenSWEInputs(inputs);
@@ -143,7 +147,9 @@ async function runOpenSWEWithStreamTracking(inputs: {
       });
       return result; // Return early if manager run failed
     }
-
+    logger.info("Manager run", {
+      managerRun,
+    });
     const managerState = managerRun as unknown as ManagerGraphState;
     const plannerSession = managerState?.plannerSession;
 
