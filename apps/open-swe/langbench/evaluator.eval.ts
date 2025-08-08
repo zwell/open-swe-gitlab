@@ -5,10 +5,11 @@ import { createLogger, LogLevel } from "../src/utils/logger.js";
 import { DEFAULT_SANDBOX_CREATE_PARAMS } from "../src/constants.js";
 import { readFileSync } from "fs";
 import { cloneRepo, checkoutFilesFromCommit } from "../src/utils/github/git.js";
-import { TargetRepository } from "@open-swe/shared/open-swe/types";
+import { GraphState, TargetRepository } from "@open-swe/shared/open-swe/types";
 import { getRepoAbsolutePath } from "@open-swe/shared/git";
 import { setupEnv } from "../src/utils/env-setup.js";
 import { PRData, PRProcessResult, OpenSWEStreamResults } from "./types.js";
+import { createPRFixPrompt } from "./prompts.js";
 import { runPytestOnFiles } from "./utils.js";
 import { v4 as uuidv4 } from "uuid";
 import { MANAGER_GRAPH_ID, GITHUB_PAT } from "@open-swe/shared/constants";
@@ -16,17 +17,33 @@ import { createLangGraphClient } from "../src/utils/langgraph-client.js";
 import { encryptSecret } from "@open-swe/shared/crypto";
 import { ManagerGraphState } from "@open-swe/shared/open-swe/manager/types";
 import { PlannerGraphState } from "@open-swe/shared/open-swe/planner/types";
-import { GraphState } from "@open-swe/shared/open-swe/types";
 import { withRetry } from "../src/utils/retry.js";
 
 dotenv.config();
 
 const logger = createLogger(LogLevel.INFO, "PR Processor");
 
-// Load PRs data
-const prsData: PRData[] = JSON.parse(
+// Load PRs data and transform snake_case to camelCase
+const rawPrsData = JSON.parse(
   readFileSync("langbench/static/langgraph_prs.json", "utf8"),
 );
+
+const prsData: PRData[] = rawPrsData.map((pr: any) => ({
+  url: pr.url,
+  htmlUrl: pr.html_url,
+  diffUrl: pr.diff_url,
+  patchUrl: pr.patch_url,
+  repoOwner: pr.repo_owner,
+  repoName: pr.repo_name,
+  prNumber: pr.pr_number,
+  mergeCommitSha: pr.merge_commit_sha,
+  preMergeCommitSha: pr.pre_merge_commit_sha,
+  title: pr.title,
+  body: pr.body,
+  createdAt: pr.created_at,
+  mergedAt: pr.merged_at,
+  testFiles: pr.test_files || [],
+}));
 
 const DATASET = prsData.map((pr) => ({ inputs: pr }));
 const DATASET_NAME = "langgraph-prs";
@@ -99,92 +116,130 @@ async function runOpenSWEWithStreamTracking(inputs: {
       repo: `${inputs.repoOwner}/${inputs.repoName}`,
       baseCommit: inputs.baseCommit,
     });
-
-    // Track manager stream
-    const managerRun = await withRetry(() =>
-      lgClient.runs.wait(threadId, MANAGER_GRAPH_ID, {
-        input,
-        config: {
-          recursion_limit: 250,
-        },
-        ifNotExists: "create",
-      })
-    );
-
-    result.managerRunId = managerRun.run_id;
-    logger.info("Manager stream completed", { 
-      threadId, 
-      managerRunId: managerRun.run_id 
-    });
+    logger.info("input", input);
+    let managerRun;
+    try {
+      managerRun = await withRetry(() =>
+        lgClient.runs.wait(threadId, MANAGER_GRAPH_ID, {
+          input,
+          config: {
+            recursion_limit: 250,
+          },
+          ifNotExists: "create",
+        }),
+      );
+    } catch (error) {
+      logger.error("Error in manager run", {
+        thread_id: threadId,
+        error:
+          error instanceof Error
+            ? {
+                message: error.message,
+                stack: error.stack,
+                name: error.name,
+                cause: error.cause,
+              }
+            : error,
+      });
+      return result; // Return early if manager run failed
+    }
 
     const managerState = managerRun as unknown as ManagerGraphState;
+    while (true) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const managerState = managerRun as unknown as ManagerGraphState;
+      if (managerState?.plannerSession) {
+        logger.info("Planner session found", {
+          plannerSession: managerState.plannerSession,
+        });
+        break;
+      } else {
+        logger.info("Planner session not found", {
+          managerState,
+        });
+      }
+    }
     const plannerSession = managerState?.plannerSession;
 
     if (!plannerSession) {
-      logger.warn("Manager did not create planner session", { threadId });
-      return result;
+      logger.info("Agent did not create a planner session", {
+        thread_id: threadId,
+      });
+      return result; // instead of skipping, we should award 0 points
     }
 
-    logger.info("Starting planner stream", {
-      threadId,
-      plannerThreadId: plannerSession.threadId,
-      plannerRunId: plannerSession.runId,
-    });
-
-    // Track planner stream
-    const plannerRun = await withRetry(() =>
-      lgClient.runs.join(plannerSession.threadId, plannerSession.runId)
-    );
-
-    result.plannerRunId = plannerRun.run_id;
-    logger.info("Planner stream completed", {
-      threadId,
-      plannerRunId: plannerRun.run_id,
-    });
+    let plannerRun;
+    try {
+      plannerRun = await withRetry(() =>
+        lgClient.runs.join(plannerSession.threadId, plannerSession.runId),
+      );
+    } catch (error) {
+      logger.error("Error joining planner run", {
+        thread_id: threadId,
+        plannerSession,
+        error:
+          error instanceof Error
+            ? {
+                message: error.message,
+                stack: error.stack,
+                name: error.name,
+                cause: error.cause,
+              }
+            : error,
+      });
+      return result; // instead of skipping, we should award 0 points
+    }
 
     const plannerState = plannerRun as unknown as PlannerGraphState;
     const programmerSession = plannerState?.programmerSession;
 
     if (!programmerSession) {
-      logger.warn("Planner did not create programmer session", { threadId });
-      return result;
+      logger.info("Agent did not create a programmer session", {
+        thread_id: threadId,
+      });
+      return result; // instead of skipping, we should award 0 points
     }
 
-    logger.info("Starting programmer stream", {
-      threadId,
-      programmerThreadId: programmerSession.threadId,
-      programmerRunId: programmerSession.runId,
-    });
-
-    // Track programmer stream
-    const programmerRun = await withRetry(() =>
-      lgClient.runs.join(programmerSession.threadId, programmerSession.runId)
-    );
-
-    result.programmerRunId = programmerRun.run_id;
-    logger.info("Programmer stream completed", {
-      threadId,
-      programmerRunId: programmerRun.run_id,
-    });
+    let programmerRun;
+    try {
+      programmerRun = await withRetry(() =>
+        lgClient.runs.join(programmerSession.threadId, programmerSession.runId),
+      );
+    } catch (error) {
+      logger.error("Error joining programmer run", {
+        thread_id: threadId,
+        programmerSession,
+        error:
+          error instanceof Error
+            ? {
+                message: error.message,
+                stack: error.stack,
+                name: error.name,
+                cause: error.cause,
+              }
+            : error,
+      });
+      return result; // instead of skipping, we should award 0 points
+    }
 
     const programmerState = programmerRun as unknown as GraphState;
     const branchName = programmerState?.branchName;
 
-    if (branchName) {
-      result.branchName = branchName;
-      logger.info("Open-swe created branch", { threadId, branchName });
-    } else {
-      logger.warn("Open-swe did not create a branch", { threadId });
+    if (!branchName) {
+      logger.info("Agent did not create a branch", {
+        thread_id: threadId,
+      });
+      return result; // instead of skipping, we should award 0 points
     }
 
-    result.success = true;
-    logger.info("Open-swe stream tracking completed successfully", {
-      threadId,
-      branchName,
-      managerRunId: result.managerRunId,
-      plannerRunId: result.plannerRunId,
-      programmerRunId: result.programmerRunId,
+    logger.info("Agent completed. Created branch:", {
+      branchName: branchName,
     });
+
+    result.managerRunId = (managerRun as any).run_id;
+    result.plannerRunId = plannerSession.runId;
+    result.programmerRunId = programmerSession.runId;
+    result.success = true;
 
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);
@@ -262,12 +317,12 @@ async function processPR(prData: PRData): Promise<PRProcessResult> {
     }
 
     // Run open-swe instance with the pre-merge commit and track streams
-    logger.info("Starting open-swe stream tracking...");
+    logger.info("Starting open-swe...");
     const openSWEResults = await runOpenSWEWithStreamTracking({
       repoOwner: prData.repoOwner,
       repoName: prData.repoName, 
       baseCommit: preMergeCommit,
-      userInput: `Fix the issues in PR #${prData.prNumber}: ${prData.title}\n\n${prData.body}`,
+      userInput: createPRFixPrompt(prData),
     });
     result.openSWEResults = openSWEResults;
 
