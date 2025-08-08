@@ -8,8 +8,16 @@ import { cloneRepo, checkoutFilesFromCommit } from "../src/utils/github/git.js";
 import { TargetRepository } from "@open-swe/shared/open-swe/types";
 import { getRepoAbsolutePath } from "@open-swe/shared/git";
 import { setupEnv } from "../src/utils/env-setup.js";
-import { PRData, PRProcessResult } from "./types.js";
+import { PRData, PRProcessResult, OpenSWEStreamResults } from "./types.js";
 import { runPytestOnFiles } from "./utils.js";
+import { v4 as uuidv4 } from "uuid";
+import { MANAGER_GRAPH_ID, GITHUB_PAT } from "@open-swe/shared/constants";
+import { createLangGraphClient } from "../src/utils/langgraph-client.js";
+import { encryptSecret } from "@open-swe/shared/crypto";
+import { ManagerGraphState } from "@open-swe/shared/open-swe/manager/types";
+import { PlannerGraphState } from "@open-swe/shared/open-swe/planner/types";
+import { GraphState } from "@open-swe/shared/open-swe/types";
+import { withRetry } from "../src/utils/retry.js";
 
 dotenv.config();
 
@@ -24,6 +32,170 @@ const DATASET = prsData.map((pr) => ({ inputs: pr }));
 const DATASET_NAME = "langgraph-prs";
 
 logger.info(`Starting evals over ${DATASET.length} PRs...`);
+
+/**
+ * Format inputs for the open-swe system
+ */
+async function formatOpenSWEInputs(inputs: {
+  repoOwner: string;
+  repoName: string;
+  baseCommit?: string;
+  userInput: string;
+}) {
+  const targetRepository: TargetRepository = {
+    owner: inputs.repoOwner,
+    repo: inputs.repoName,
+    branch: undefined,
+    baseCommit: inputs.baseCommit,
+  };
+
+  const userMessageContent = `<request>
+${inputs.userInput}
+</request>`;
+
+  return {
+    messages: [{ type: "human", content: userMessageContent }],
+    targetRepository,
+    autoAcceptPlan: true,
+  };
+}
+
+/**
+ * Run open-swe instance and track manager, planner, programmer streams
+ */
+async function runOpenSWEWithStreamTracking(inputs: {
+  repoOwner: string;
+  repoName: string;
+  baseCommit?: string;
+  userInput: string;
+}): Promise<OpenSWEStreamResults> {
+  const result: OpenSWEStreamResults = {
+    success: false,
+  };
+
+  try {
+    const encryptionKey = process.env.SECRETS_ENCRYPTION_KEY;
+    const githubPat = process.env.GITHUB_PAT;
+
+    if (!encryptionKey || !githubPat) {
+      throw new Error(
+        "SECRETS_ENCRYPTION_KEY and GITHUB_PAT environment variables are required"
+      );
+    }
+
+    const encryptedGitHubToken = encryptSecret(githubPat, encryptionKey);
+
+    const lgClient = createLangGraphClient({
+      includeApiKey: true,
+      defaultHeaders: { [GITHUB_PAT]: encryptedGitHubToken },
+    });
+
+    const input = await formatOpenSWEInputs(inputs);
+    const threadId = uuidv4();
+    result.threadId = threadId;
+
+    logger.info("Starting manager stream", {
+      threadId,
+      repo: `${inputs.repoOwner}/${inputs.repoName}`,
+      baseCommit: inputs.baseCommit,
+    });
+
+    // Track manager stream
+    const managerRun = await withRetry(() =>
+      lgClient.runs.wait(threadId, MANAGER_GRAPH_ID, {
+        input,
+        config: {
+          recursion_limit: 250,
+        },
+        ifNotExists: "create",
+      })
+    );
+
+    result.managerRunId = managerRun.run_id;
+    logger.info("Manager stream completed", { 
+      threadId, 
+      managerRunId: managerRun.run_id 
+    });
+
+    const managerState = managerRun as unknown as ManagerGraphState;
+    const plannerSession = managerState?.plannerSession;
+
+    if (!plannerSession) {
+      logger.warn("Manager did not create planner session", { threadId });
+      return result;
+    }
+
+    logger.info("Starting planner stream", {
+      threadId,
+      plannerThreadId: plannerSession.threadId,
+      plannerRunId: plannerSession.runId,
+    });
+
+    // Track planner stream
+    const plannerRun = await withRetry(() =>
+      lgClient.runs.join(plannerSession.threadId, plannerSession.runId)
+    );
+
+    result.plannerRunId = plannerRun.run_id;
+    logger.info("Planner stream completed", {
+      threadId,
+      plannerRunId: plannerRun.run_id,
+    });
+
+    const plannerState = plannerRun as unknown as PlannerGraphState;
+    const programmerSession = plannerState?.programmerSession;
+
+    if (!programmerSession) {
+      logger.warn("Planner did not create programmer session", { threadId });
+      return result;
+    }
+
+    logger.info("Starting programmer stream", {
+      threadId,
+      programmerThreadId: programmerSession.threadId,
+      programmerRunId: programmerSession.runId,
+    });
+
+    // Track programmer stream
+    const programmerRun = await withRetry(() =>
+      lgClient.runs.join(programmerSession.threadId, programmerSession.runId)
+    );
+
+    result.programmerRunId = programmerRun.run_id;
+    logger.info("Programmer stream completed", {
+      threadId,
+      programmerRunId: programmerRun.run_id,
+    });
+
+    const programmerState = programmerRun as unknown as GraphState;
+    const branchName = programmerState?.branchName;
+
+    if (branchName) {
+      result.branchName = branchName;
+      logger.info("Open-swe created branch", { threadId, branchName });
+    } else {
+      logger.warn("Open-swe did not create a branch", { threadId });
+    }
+
+    result.success = true;
+    logger.info("Open-swe stream tracking completed successfully", {
+      threadId,
+      branchName,
+      managerRunId: result.managerRunId,
+      plannerRunId: result.plannerRunId,
+      programmerRunId: result.programmerRunId,
+    });
+
+  } catch (error) {
+    result.error = error instanceof Error ? error.message : String(error);
+    logger.error("Open-swe stream tracking failed", {
+      threadId: result.threadId,
+      error: result.error,
+    });
+  }
+
+  return result;
+}
 
 /**
  * Process a single PR
@@ -88,6 +260,16 @@ async function processPR(prData: PRData): Promise<PRProcessResult> {
     if (!envSetupSuccess) {
       logger.warn("Failed to setup Python environment, continuing anyway");
     }
+
+    // Run open-swe instance with the pre-merge commit and track streams
+    logger.info("Starting open-swe stream tracking...");
+    const openSWEResults = await runOpenSWEWithStreamTracking({
+      repoOwner: prData.repoOwner,
+      repoName: prData.repoName, 
+      baseCommit: preMergeCommit,
+      userInput: `Fix the issues in PR #${prData.prNumber}: ${prData.title}\n\n${prData.body}`,
+    });
+    result.openSWEResults = openSWEResults;
 
     // Checkout test files from the merge commit to get the updated test files
     if (testFiles.length > 0) {
@@ -168,6 +350,17 @@ ls.describe(DATASET_NAME, () => {
               passedTests: result.testResults.passedTests,
               failedTests: result.testResults.failedTests,
               success: result.testResults.success,
+            }
+          : null,
+        openSWEResults: result.openSWEResults
+          ? {
+              threadId: result.openSWEResults.threadId,
+              managerRunId: result.openSWEResults.managerRunId,
+              plannerRunId: result.openSWEResults.plannerRunId,
+              programmerRunId: result.openSWEResults.programmerRunId,
+              branchName: result.openSWEResults.branchName,
+              success: result.openSWEResults.success,
+              error: result.openSWEResults.error,
             }
           : null,
         error: result.error,
