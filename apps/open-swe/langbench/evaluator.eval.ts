@@ -158,13 +158,19 @@ async function runOpenSWEWithStreamTracking(inputs: {
       return result; // instead of skipping, we should award 0 points
     }
 
+    logger.info("✅ Successfully detected planner session", {
+      thread_id: threadId,
+      plannerSessionId: plannerSession.threadId,
+      plannerRunId: plannerSession.runId,
+    });
+
     let plannerRun;
     try {
       plannerRun = await withRetry(() =>
         lgClient.runs.join(plannerSession.threadId, plannerSession.runId),
       );
 
-      logger.info("Agent joined planner session", {
+      logger.info("✅ Successfully joined planner session", {
         plannerSession,
       });
     } catch (error) {
@@ -194,8 +200,10 @@ async function runOpenSWEWithStreamTracking(inputs: {
       return result; // instead of skipping, we should award 0 points
     }
 
-    logger.info("Agent joined programmer session", {
-      programmerSession,
+    logger.info("✅ Successfully detected programmer session", {
+      thread_id: threadId,
+      programmerSessionId: programmerSession.threadId,
+      programmerRunId: programmerSession.runId,
     });
 
     let programmerRun;
@@ -203,6 +211,10 @@ async function runOpenSWEWithStreamTracking(inputs: {
       programmerRun = await withRetry(() =>
         lgClient.runs.join(programmerSession.threadId, programmerSession.runId),
       );
+
+      logger.info("✅ Successfully joined programmer session", {
+        programmerSession,
+      });
     } catch (error) {
       logger.error("Error joining programmer run", {
         thread_id: threadId,
@@ -435,6 +447,6 @@ ls.describe(DATASET_NAME, () => {
         throw new Error(`PR processing failed: ${result.error}`);
       }
     },
-    300_000, // 5 minute timeout per PR
+    0, // No timeout - run forever
   );
 });

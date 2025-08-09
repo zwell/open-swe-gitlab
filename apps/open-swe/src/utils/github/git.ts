@@ -560,6 +560,31 @@ async function performClone(
   });
 
   if (targetRepository.baseCommit) {
+    // When cloning from a baseCommit, we're in detached HEAD state
+    // Create a branch if we have a branchName
+    if (branchName) {
+      try {
+        logger.info("Creating branch from baseCommit", {
+          branch: branchName,
+          baseCommit: targetRepository.baseCommit,
+        });
+        
+        await sandbox.git.createBranch(absoluteRepoDir, branchName);
+        
+        logger.info("Successfully created branch from baseCommit", {
+          branch: branchName,
+        });
+        
+        return branchName;
+      } catch (error) {
+        logger.error("Failed to create branch from baseCommit", {
+          branchName,
+          baseCommit: targetRepository.baseCommit,
+          error,
+        });
+        throw error;
+      }
+    }
     return targetRepository.baseCommit;
   }
 

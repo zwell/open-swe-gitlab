@@ -35,6 +35,10 @@ import {
   getActivePlanItems,
   getPullRequestNumberFromActiveTask,
 } from "@open-swe/shared/open-swe/tasks";
+import {
+  isLocalMode,
+  getLocalWorkingDirectory,
+} from "@open-swe/shared/open-swe/local-mode";
 import { createOpenPrToolFields } from "@open-swe/shared/open-swe/tools";
 import { trackCachePerformance } from "../../../utils/caching.js";
 import { getModelManager } from "../../../utils/llms/model-manager.js";
@@ -43,7 +47,6 @@ import {
   GitHubPullRequestList,
   GitHubPullRequestUpdate,
 } from "../../../utils/github/types.js";
-import { getRepoAbsolutePath } from "@open-swe/shared/git";
 
 const logger = createLogger(LogLevel.INFO, "Open PR");
 
@@ -114,26 +117,29 @@ export async function openPullRequest(
   let branchName = state.branchName;
   let updatedTaskPlan: TaskPlan | undefined;
 
-  const repoPath = getRepoAbsolutePath(state.targetRepository);
-  const changedFiles = await getChangedFilesStatus(repoPath, sandbox, config);
+  // Only check for changed files and commit in local mode
+  if (isLocalMode(config)) {
+    const repoPath = getLocalWorkingDirectory();
+    const changedFiles = await getChangedFilesStatus(repoPath, sandbox, config);
 
-  if (changedFiles.length > 0) {
-    logger.info(`Has ${changedFiles.length} changed files. Committing.`, {
-      changedFiles,
-    });
-    const result = await checkoutBranchAndCommit(
-      config,
-      state.targetRepository,
-      sandbox,
-      {
-        branchName,
-        githubInstallationToken,
-        taskPlan: state.taskPlan,
-        githubIssueId: state.githubIssueId,
-      },
-    );
-    branchName = result.branchName;
-    updatedTaskPlan = result.updatedTaskPlan;
+    if (changedFiles.length > 0) {
+      logger.info(`Has ${changedFiles.length} changed files. Committing.`, {
+        changedFiles,
+      });
+      const result = await checkoutBranchAndCommit(
+        config,
+        state.targetRepository,
+        sandbox,
+        {
+          branchName,
+          githubInstallationToken,
+          taskPlan: state.taskPlan,
+          githubIssueId: state.githubIssueId,
+        },
+      );
+      branchName = result.branchName;
+      updatedTaskPlan = result.updatedTaskPlan;
+    }
   }
 
   const openPrTool = createOpenPrToolFields();
@@ -197,7 +203,7 @@ export async function openPullRequest(
       title,
       body: `Fixes #${state.githubIssueId}\n\n${body}`,
       githubInstallationToken,
-      baseBranch: state.targetRepository.branch,
+      baseBranch: state.targetRepository.baseCommit ?? state.targetRepository.branch,
     });
   } else {
     // Ensure the PR is ready for review
