@@ -12,7 +12,7 @@ import { PRData, PRProcessResult, OpenSWEStreamResults } from "./types.js";
 import { createPRFixPrompt } from "./prompts.js";
 import { runPytestOnFiles } from "./utils.js";
 import { v4 as uuidv4 } from "uuid";
-import { MANAGER_GRAPH_ID, GITHUB_PAT, GITHUB_INSTALLATION_ID } from "@open-swe/shared/constants";
+import { MANAGER_GRAPH_ID, GITHUB_PAT } from "@open-swe/shared/constants";
 import { createLangGraphClient } from "../src/utils/langgraph-client.js";
 import { encryptSecret } from "@open-swe/shared/crypto";
 import { ManagerGraphState } from "@open-swe/shared/open-swe/manager/types";
@@ -93,11 +93,10 @@ async function runOpenSWEWithStreamTracking(inputs: {
   try {
     const encryptionKey = process.env.SECRETS_ENCRYPTION_KEY;
     const githubPat = process.env.GITHUB_PAT;
-    const githubInstallationId = process.env.GITHUB_INSTALLATION_ID;
 
-    if (!encryptionKey || !githubPat || !githubInstallationId) {
+    if (!encryptionKey || !githubPat) {
       throw new Error(
-        "SECRETS_ENCRYPTION_KEY, GITHUB_PAT, and GITHUB_INSTALLATION_ID environment variables are required"
+        "SECRETS_ENCRYPTION_KEY and GITHUB_PAT environment variables are required",
       );
     }
 
@@ -105,9 +104,8 @@ async function runOpenSWEWithStreamTracking(inputs: {
 
     const lgClient = createLangGraphClient({
       includeApiKey: true,
-      defaultHeaders: { 
+      defaultHeaders: {
         [GITHUB_PAT]: encryptedGitHubToken,
-        [GITHUB_INSTALLATION_ID]: githubInstallationId,
       },
     });
 
@@ -165,6 +163,10 @@ async function runOpenSWEWithStreamTracking(inputs: {
       plannerRun = await withRetry(() =>
         lgClient.runs.join(plannerSession.threadId, plannerSession.runId),
       );
+
+      logger.info("Agent joined planner session", {
+        plannerSession,
+      });
     } catch (error) {
       logger.error("Error joining planner run", {
         thread_id: threadId,
@@ -191,6 +193,10 @@ async function runOpenSWEWithStreamTracking(inputs: {
       });
       return result; // instead of skipping, we should award 0 points
     }
+
+    logger.info("Agent joined programmer session", {
+      programmerSession,
+    });
 
     let programmerRun;
     try {
@@ -231,8 +237,8 @@ async function runOpenSWEWithStreamTracking(inputs: {
     result.managerRunId = (managerRun as any).run_id;
     result.plannerRunId = plannerSession.runId;
     result.programmerRunId = programmerSession.runId;
+    result.branchName = branchName;
     result.success = true;
-
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);
     logger.error("Open-swe stream tracking failed", {
@@ -312,16 +318,20 @@ async function processPR(prData: PRData): Promise<PRProcessResult> {
     logger.info("Starting open-swe...");
     const openSWEResults = await runOpenSWEWithStreamTracking({
       repoOwner: prData.repoOwner,
-      repoName: prData.repoName, 
+      repoName: prData.repoName,
       baseCommit: preMergeCommit,
       userInput: createPRFixPrompt(prData),
     });
     result.openSWEResults = openSWEResults;
 
-    // Checkout test files from the merge commit to get the updated test files
-    if (testFiles.length > 0) {
+    // Only proceed with test checkout and execution if open-swe was successful and created a branch
+    if (
+      openSWEResults.success &&
+      openSWEResults.branchName &&
+      testFiles.length > 0
+    ) {
       logger.info(
-        `Checking out test files from merge commit: ${prData.mergeCommitSha}`,
+        `Open-swe completed successfully with branch: ${openSWEResults.branchName}. Checking out test files from merge commit: ${prData.mergeCommitSha}`,
       );
       await checkoutFilesFromCommit({
         sandbox,
@@ -329,13 +339,7 @@ async function processPR(prData: PRData): Promise<PRProcessResult> {
         commitSha: prData.mergeCommitSha,
         filePaths: testFiles,
       });
-    }
 
-    // Run tests on detected test files
-    if (testFiles.length > 0) {
-      logger.info(
-        `Running pytest on ${testFiles.length} detected test files...`,
-      );
       const testResults = await runPytestOnFiles({
         sandbox,
         testFiles,
@@ -345,13 +349,24 @@ async function processPR(prData: PRData): Promise<PRProcessResult> {
       result.testResults = testResults;
 
       logger.info(`Test execution completed for PR #${prData.prNumber}`, {
+        branchName: openSWEResults.branchName,
         totalTests: testResults.totalTests,
         passedTests: testResults.passedTests,
         failedTests: testResults.failedTests,
         success: testResults.success,
       });
     } else {
-      logger.info(`No test files to run for PR #${prData.prNumber}`);
+      if (!openSWEResults.success) {
+        logger.info(
+          `Open-swe failed for PR #${prData.prNumber}, skipping test execution`,
+        );
+      } else if (!openSWEResults.branchName) {
+        logger.info(
+          `No branch created by open-swe for PR #${prData.prNumber}, skipping test execution`,
+        );
+      } else if (testFiles.length === 0) {
+        logger.info(`No test files found for PR #${prData.prNumber}`);
+      }
     }
 
     result.success = true;
