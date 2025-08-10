@@ -4,7 +4,7 @@ import { Daytona, Sandbox } from "@daytonaio/sdk";
 import { createLogger, LogLevel } from "../src/utils/logger.js";
 import { DEFAULT_SANDBOX_CREATE_PARAMS } from "../src/constants.js";
 import { readFileSync } from "fs";
-import { cloneRepo, checkoutFilesFromCommit } from "../src/utils/github/git.js";
+import { cloneRepo, checkoutFilesFromCommit, pushEmptyCommit } from "../src/utils/github/git.js";
 import { GraphState, TargetRepository } from "@open-swe/shared/open-swe/types";
 import { getRepoAbsolutePath } from "@open-swe/shared/git";
 import { setupEnv } from "../src/utils/env-setup.js";
@@ -265,6 +265,38 @@ async function runOpenSWEWithStreamTracking(inputs: {
 }
 
 /**
+ * Add and commit files to remote branch
+ */
+async function addCommitAndPush(
+  sandbox: Sandbox,
+  repoDir: string,
+  targetRepository: TargetRepository,
+  githubToken: string
+): Promise<void> {
+  const status = await sandbox.process.executeCommand(
+    `git status`,
+    repoDir,
+    undefined,
+    60000,
+  );
+  logger.info(`Git status: ${status.result}`);
+
+  logger.info("Adding checked-out test files to the branch");
+  await sandbox.process.executeCommand(
+    `git add .`,
+    repoDir,
+    undefined,
+    60000,
+  );
+
+  logger.info("Committing and pushing test files to remote branch");
+  await pushEmptyCommit(targetRepository, sandbox, {
+    githubInstallationToken: githubToken,
+  });
+  logger.info("Successfully committed and pushed test files to remote branch");
+}
+
+/**
  * Process a single PR
  */
 async function processPR(prData: PRData): Promise<PRProcessResult> {
@@ -316,7 +348,7 @@ async function processPR(prData: PRData): Promise<PRProcessResult> {
     if (!githubToken) {
       throw new Error("GITHUB_PAT environment variable is required");
     }
-
+    
     await cloneRepo(sandbox, targetRepository, {
       githubInstallationToken: githubToken,
     });
@@ -348,6 +380,26 @@ async function processPR(prData: PRData): Promise<PRProcessResult> {
       logger.warn("Failed to setup Python environment, continuing anyway");
     }
 
+    // Checkout test files from merge commit before running open-swe
+    if (testFiles.length > 0) {
+      logger.info(
+        `Checking out test files from merge commit before running open-swe: ${prData.mergeCommitSha}`,
+      );
+      await checkoutFilesFromCommit({
+        sandbox,
+        repoDir,
+        commitSha: prData.mergeCommitSha,
+        filePaths: testFiles,
+      });
+
+      logger.info(`Successfully checked out ${testFiles.length} test files`);
+
+      // Add, commit and push the checked-out test files
+      await addCommitAndPush(sandbox, repoDir, targetRepository, githubToken);
+    } else {
+      logger.info(`No test files found for PR #${prData.prNumber}`);
+    }
+
     // Run open-swe instance with the pre-merge commit and track streams
     logger.info("Starting open-swe...");
     const openSWEResults = await runOpenSWEWithStreamTracking({
@@ -358,21 +410,15 @@ async function processPR(prData: PRData): Promise<PRProcessResult> {
     });
     result.openSWEResults = openSWEResults;
 
-    // Only proceed with test checkout and execution if open-swe was successful and created a branch
+    // Run tests if open-swe was successful and created a branch
     if (
       openSWEResults.success &&
       openSWEResults.branchName &&
       testFiles.length > 0
     ) {
       logger.info(
-        `Open-swe completed successfully with branch: ${openSWEResults.branchName}. Checking out test files from merge commit: ${prData.mergeCommitSha}`,
+        `Open-swe completed successfully with branch: ${openSWEResults.branchName}. Running tests on checked out files.`,
       );
-      await checkoutFilesFromCommit({
-        sandbox,
-        repoDir,
-        commitSha: prData.mergeCommitSha,
-        filePaths: testFiles,
-      });
 
       const testResults = await runPytestOnFiles({
         sandbox,
