@@ -372,14 +372,6 @@ async function processPR(prData: PRData): Promise<PRProcessResult> {
     logger.info("Pushed pre-merge state to a test branch", {
       branch: preMergeBranch,
     });
-
-    // Setup Python environment
-    logger.info("Setting up Python environment...");
-    const envSetupSuccess = await setupEnv(sandbox, repoDir);
-    if (!envSetupSuccess) {
-      logger.warn("Failed to setup Python environment, continuing anyway");
-    }
-
     // Checkout test files from merge commit before running open-swe
     if (testFiles.length > 0) {
       logger.info(
