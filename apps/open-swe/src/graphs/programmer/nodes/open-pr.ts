@@ -203,7 +203,8 @@ export async function openPullRequest(
       title,
       body: `Fixes #${state.githubIssueId}\n\n${body}`,
       githubInstallationToken,
-      baseBranch: state.targetRepository.baseCommit ?? state.targetRepository.branch,
+      baseBranch:
+        state.targetRepository.baseCommit ?? state.targetRepository.branch,
     });
   } else {
     // Ensure the PR is ready for review

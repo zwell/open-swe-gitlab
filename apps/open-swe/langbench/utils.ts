@@ -57,11 +57,12 @@ const LANGGRAPH_INSTALL_COMMAND = `${RUN_PIP_IN_VENV} install -e ./libs/langgrap
 
 /**
  * Run pytest on specific test files and return structured results
+ * Optionally checkout a specific branch before running tests
  */
-export async function runPytestOnFiles(
+export async function runTestsOnBranch(
   options: RunPytestOptions,
 ): Promise<TestResults> {
-  const { sandbox, testFiles, repoDir, timeoutSec = 300 } = options;
+  const { sandbox, testFiles, repoDir, timeoutSec = 300, branchName } = options;
   if (testFiles.length === 0) {
     logger.warn("No test files provided, skipping pytest execution");
     return {
@@ -74,8 +75,32 @@ export async function runPytestOnFiles(
     };
   }
 
+  // Checkout branch if specified
+  if (branchName) {
+    logger.info(`Fetching and checking out branch: ${branchName}`);
+
+    // Fetch the branch from remote
+    await sandbox.process.executeCommand(
+      `git fetch origin ${branchName}`,
+      repoDir,
+      undefined,
+      60000,
+    );
+
+    // Checkout the branch
+    await sandbox.process.executeCommand(
+      `git checkout ${branchName}`,
+      repoDir,
+      undefined,
+      60000,
+    );
+
+    logger.info(`Successfully checked out branch: ${branchName}`);
+  }
+
   logger.info(`Running pytest on ${testFiles.length} test files`, {
     testFiles,
+    branchName,
   });
 
   // Join test files for pytest command

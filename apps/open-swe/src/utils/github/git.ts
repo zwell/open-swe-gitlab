@@ -568,13 +568,13 @@ async function performClone(
           branch: branchName,
           baseCommit: targetRepository.baseCommit,
         });
-        
+
         await sandbox.git.createBranch(absoluteRepoDir, branchName);
-        
+
         logger.info("Successfully created branch from baseCommit", {
           branch: branchName,
         });
-        
+
         return branchName;
       } catch (error) {
         logger.error("Failed to create branch from baseCommit", {

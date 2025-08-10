@@ -72,4 +72,5 @@ export interface RunPytestOptions {
   testFiles: string[];
   repoDir: string;
   timeoutSec?: number;
+  branchName?: string;
 }
