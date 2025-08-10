@@ -58,12 +58,12 @@ async function formatOpenSWEInputs(inputs: {
   repoName: string;
   baseCommit?: string;
   userInput: string;
+  branchName?: string;
 }) {
   const targetRepository: TargetRepository = {
     owner: inputs.repoOwner,
     repo: inputs.repoName,
-    branch: undefined,
-    baseCommit: inputs.baseCommit,
+    branch: inputs.branchName,
   };
 
   const userMessageContent = `<request>
@@ -73,6 +73,7 @@ ${inputs.userInput}
   return {
     messages: [{ type: "human", content: userMessageContent }],
     targetRepository,
+    branchName: inputs.branchName,
     autoAcceptPlan: true,
   };
 }
@@ -85,6 +86,7 @@ async function runOpenSWEWithStreamTracking(inputs: {
   repoName: string;
   baseCommit?: string;
   userInput: string;
+  branchName?: string;
 }): Promise<OpenSWEStreamResults> {
   const result: OpenSWEStreamResults = {
     success: false,
@@ -319,6 +321,26 @@ async function processPR(prData: PRData): Promise<PRProcessResult> {
       githubInstallationToken: githubToken,
     });
 
+    logger.info('starting to push pre-merge state to a test branch')
+
+    // Push the pre-merge state to a test branch
+    const preMergeBranch = `pre-merge-test-${Date.now()}`;
+    await sandbox.process.executeCommand(
+      `git checkout -b ${preMergeBranch}`,
+      repoDir,
+      undefined,
+      120000,
+    );
+    await sandbox.git.push(
+      repoDir,
+      "git",
+      githubToken,
+    );
+
+    logger.info("Pushed pre-merge state to a test branch", {
+      branch: preMergeBranch,
+    });
+
     // Setup Python environment
     logger.info("Setting up Python environment...");
     const envSetupSuccess = await setupEnv(sandbox, repoDir);
@@ -331,8 +353,8 @@ async function processPR(prData: PRData): Promise<PRProcessResult> {
     const openSWEResults = await runOpenSWEWithStreamTracking({
       repoOwner: prData.repoOwner,
       repoName: prData.repoName,
-      baseCommit: preMergeCommit,
       userInput: createPRFixPrompt(prData),
+      branchName: preMergeBranch,
     });
     result.openSWEResults = openSWEResults;
 
