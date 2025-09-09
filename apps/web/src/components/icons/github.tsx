@@ -1,14 +1,14 @@
-interface GitHubSVGProps {
+interface GitLabSVGProps {
   width?: string;
   height?: string;
   className?: string;
 }
 
-export const GitHubSVG = ({
+export const GitLabSVG = ({
   width = "100%",
   height = "100%",
   className,
-}: GitHubSVGProps) => (
+}: GitLabSVGProps) => (
   <svg
     role="img"
     viewBox="0 0 24 24"

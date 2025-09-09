@@ -26,16 +26,13 @@ import {
   PROGRAMMER_GRAPH_ID,
   OPEN_SWE_STREAM_MODE,
   LOCAL_MODE_HEADER,
-  GITHUB_INSTALLATION_ID,
-  GITHUB_INSTALLATION_TOKEN_COOKIE,
-  GITHUB_PAT,
 } from "@open-swe/shared/constants";
 import { PlannerGraphState } from "@open-swe/shared/open-swe/planner/types";
 import { createLangGraphClient } from "../../../utils/langgraph-client.js";
 import {
   addProposedPlanToIssue,
   addTaskPlanToIssue,
-} from "../../../utils/github/issue-task.js";
+} from "../../../utils/gitlab/issue-task.js";
 import { createLogger, LogLevel } from "../../../utils/logger.js";
 import {
   ACCEPTED_PLAN_NODE_ID,
@@ -45,10 +42,9 @@ import { getDefaultHeaders } from "../../../utils/default-headers.js";
 import { getCustomConfigurableFields } from "../../../utils/config.js";
 import { isLocalMode } from "@open-swe/shared/open-swe/local-mode";
 import {
-  postGitHubIssueComment,
+  postIssueComment,
   cleanTaskItems,
-} from "../../../utils/github/plan.js";
-import { regenerateInstallationToken } from "../../../utils/github/regenerate-token.js";
+} from "../../../utils/gitlab/plan.js";
 
 const logger = createLogger(LogLevel.INFO, "ProposedPlan");
 
@@ -95,19 +91,6 @@ async function startProgrammerRun(input: {
   const defaultHeaders = isLocal
     ? { [LOCAL_MODE_HEADER]: "true" }
     : getDefaultHeaders(config);
-
-  // Only regenerate if its not running in local mode, and the GITHUB_PAT is not in the headers
-  // If the GITHUB_PAT is in the headers, then it means we're running an eval and this does not need to be regenerated
-  if (!isLocal && !(GITHUB_PAT in defaultHeaders)) {
-    logger.info(
-      "Regenerating installation token before starting programmer run.",
-    );
-    defaultHeaders[GITHUB_INSTALLATION_TOKEN_COOKIE] =
-      await regenerateInstallationToken(defaultHeaders[GITHUB_INSTALLATION_ID]);
-    logger.info(
-      "Regenerated installation token before starting programmer run.",
-    );
-  }
 
   const langGraphClient = createLangGraphClient({
     defaultHeaders,
@@ -211,7 +194,7 @@ export async function interruptProposedPlan(
 
     // Post comment to GitHub issue about auto-accepting the plan (only if not in local mode)
     if (!isLocalMode(config) && state.githubIssueId) {
-      await postGitHubIssueComment({
+      await postIssueComment({
         githubIssueId: state.githubIssueId,
         targetRepository: state.targetRepository,
         commentBody: `### 🤖 Plan Generated\n\nI've generated a plan for this issue and will proceed to implement it since auto-accept is enabled.\n\n**Plan: ${state.proposedPlanTitle}**\n\n${proposedPlan.map((step, index) => `- Task ${index + 1}:\n${cleanTaskItems(step)}`).join("\n")}\n\nProceeding to implementation...`,
@@ -259,7 +242,7 @@ export async function interruptProposedPlan(
     );
 
     // Post comment to GitHub issue about plan being ready for approval
-    await postGitHubIssueComment({
+    await postIssueComment({
       githubIssueId: state.githubIssueId,
       targetRepository: state.targetRepository,
       commentBody: `### 🟠 Plan Ready for Approval 🟠\n\nI've generated a plan for this issue and it's ready for your review.\n\n**Plan: ${state.proposedPlanTitle}**\n\n${proposedPlan.map((step, index) => `- Task ${index + 1}:\n${cleanTaskItems(step)}`).join("\n")}\n\nPlease review the plan and let me know if you'd like me to proceed, make changes, or if you have any feedback.`,
@@ -322,7 +305,7 @@ export async function interruptProposedPlan(
 
     // Update the comment to notify the user that the plan was accepted (only if not in local mode)
     if (!isLocalMode(config) && state.githubIssueId) {
-      await postGitHubIssueComment({
+      await postIssueComment({
         githubIssueId: state.githubIssueId,
         targetRepository: state.targetRepository,
         commentBody: `### ✅ Plan Accepted ✅\n\nThe proposed plan was accepted.\n\n**Plan: ${state.proposedPlanTitle}**\n\n${planItems.map((step, index) => `- Task ${index + 1}:\n${cleanTaskItems(step.plan)}`).join("\n")}\n\nProceeding to implementation...`,
@@ -349,7 +332,7 @@ export async function interruptProposedPlan(
 
     // Update the comment to notify the user that the plan was edited (only if not in local mode)
     if (!isLocalMode(config) && state.githubIssueId) {
-      await postGitHubIssueComment({
+      await postIssueComment({
         githubIssueId: state.githubIssueId,
         targetRepository: state.targetRepository,
         commentBody: `### ✅ Plan Edited & Submitted ✅\n\nThe proposed plan was edited and submitted.\n\n**Plan: ${state.proposedPlanTitle}**\n\n${planItems.map((step, index) => `- Task ${index + 1}:\n${cleanTaskItems(step.plan)}`).join("\n")}\n\nProceeding to implementation...`,

@@ -376,6 +376,7 @@ export async function checkoutBranchAndCommit(
 export async function pushEmptyCommit(
   targetRepository: TargetRepository,
   sandbox: Sandbox,
+  config: GraphConfig,
   options: {
     githubInstallationToken: string;
   },
@@ -390,12 +391,12 @@ export async function pushEmptyCommit(
 
   try {
     const absoluteRepoDir = getRepoAbsolutePath(targetRepository);
-    const setGitConfigRes = await sandbox.process.executeCommand(
-      `git config user.name "${userName}" && git config user.email "${userEmail}"`,
-      absoluteRepoDir,
-      undefined,
-      TIMEOUT_SEC,
-    );
+    const executor = createShellExecutor(config);
+    const setGitConfigRes = await executor.executeCommand({
+      command: `git config user.name "${userName}" && git config user.email "${userEmail}"`,
+      workdir: absoluteRepoDir,
+      timeout: TIMEOUT_SEC,
+    });
     if (setGitConfigRes.exitCode !== 0) {
       logger.error(`Failed to set git config`, {
         exitCode: setGitConfigRes.exitCode,
@@ -404,12 +405,11 @@ export async function pushEmptyCommit(
       return;
     }
 
-    const emptyCommitRes = await sandbox.process.executeCommand(
-      "git commit --allow-empty -m 'Empty commit to trigger CI'",
-      absoluteRepoDir,
-      undefined,
-      TIMEOUT_SEC,
-    );
+    const emptyCommitRes = await executor.executeCommand({
+      command: "git commit --allow-empty -m 'Empty commit to trigger CI'",
+      workdir: absoluteRepoDir,
+      timeout: TIMEOUT_SEC,
+    });
     if (emptyCommitRes.exitCode !== 0) {
       logger.error(`Failed to push empty commit`, {
         exitCode: emptyCommitRes.exitCode,
@@ -560,31 +560,6 @@ async function performClone(
   });
 
   if (targetRepository.baseCommit) {
-    // When cloning from a baseCommit, we're in detached HEAD state
-    // Create a branch if we have a branchName
-    if (branchName) {
-      try {
-        logger.info("Creating branch from baseCommit", {
-          branch: branchName,
-          baseCommit: targetRepository.baseCommit,
-        });
-
-        await sandbox.git.createBranch(absoluteRepoDir, branchName);
-
-        logger.info("Successfully created branch from baseCommit", {
-          branch: branchName,
-        });
-
-        return branchName;
-      } catch (error) {
-        logger.error("Failed to create branch from baseCommit", {
-          branchName,
-          baseCommit: targetRepository.baseCommit,
-          error,
-        });
-        throw error;
-      }
-    }
     return targetRepository.baseCommit;
   }
 

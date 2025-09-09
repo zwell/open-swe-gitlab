@@ -15,14 +15,12 @@ import {
 import { ContentBlocksPreview } from "../thread/ContentBlocksPreview";
 import { ThemeToggle } from "../theme-toggle";
 import { ThreadCard, ThreadCardLoading } from "./thread-card";
-import { GitHubInstallationBanner } from "../github/installation-banner";
 import { ApiKeyBanner } from "../api-key-banner";
-import { IssuesRequiredBanner } from "../github/forked-repository-banner";
+import { IssuesRequiredBanner } from "../gitlab/forked-repository-banner";
 import { QuickActions } from "./quick-actions";
 import { DraftsSection } from "./drafts-section";
 import { MANAGER_GRAPH_ID } from "@open-swe/shared/constants";
 import { TooltipIconButton } from "../ui/tooltip-icon-button";
-import { UserPopover } from "../user-popover";
 
 import { useThreadsStatus } from "@/hooks/useThreadsStatus";
 import { Thread } from "@langchain/langgraph-sdk";
@@ -133,7 +131,7 @@ export function DefaultView({ threads, threadsLoading }: DefaultViewProps) {
             <OpenDocumentationButton />
             <OpenSettingsButton />
             <ThemeToggle />
-            <UserPopover />
+            {/*<UserPopover />*/}
           </div>
         </div>
       </div>
@@ -141,7 +139,6 @@ export function DefaultView({ threads, threadsLoading }: DefaultViewProps) {
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-4xl space-y-6 p-4">
-          <GitHubInstallationBanner />
           <ApiKeyBanner />
           <IssuesRequiredBanner />
           {/* Terminal Chat Input */}

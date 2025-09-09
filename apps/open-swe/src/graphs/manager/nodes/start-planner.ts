@@ -10,18 +10,14 @@ import {
   OPEN_SWE_STREAM_MODE,
   PLANNER_GRAPH_ID,
   LOCAL_MODE_HEADER,
-  GITHUB_INSTALLATION_ID,
-  GITHUB_INSTALLATION_TOKEN_COOKIE,
-  GITHUB_PAT,
 } from "@open-swe/shared/constants";
 import { createLogger, LogLevel } from "../../../utils/logger.js";
-import { getBranchName } from "../../../utils/github/git.js";
+import { getBranchName } from "../../../utils/gitlab/git.js";
 import { PlannerGraphUpdate } from "@open-swe/shared/open-swe/planner/types";
 import { getDefaultHeaders } from "../../../utils/default-headers.js";
 import { getCustomConfigurableFields } from "../../../utils/config.js";
 import { getRecentUserRequest } from "../../../utils/user-request.js";
 import { StreamMode } from "@langchain/langgraph-sdk";
-import { regenerateInstallationToken } from "../../../utils/github/regenerate-token.js";
 
 const logger = createLogger(LogLevel.INFO, "StartPlanner");
 
@@ -44,15 +40,6 @@ export async function startPlanner(
   const defaultHeaders = localMode
     ? { [LOCAL_MODE_HEADER]: "true" }
     : getDefaultHeaders(config);
-
-  // Only regenerate if its not running in local mode, and the GITHUB_PAT is not in the headers
-  // If the GITHUB_PAT is in the headers, then it means we're running an eval and this does not need to be regenerated
-  if (!localMode && !(GITHUB_PAT in defaultHeaders)) {
-    logger.info("Regenerating installation token before starting planner run.");
-    defaultHeaders[GITHUB_INSTALLATION_TOKEN_COOKIE] =
-      await regenerateInstallationToken(defaultHeaders[GITHUB_INSTALLATION_ID]);
-    logger.info("Regenerated installation token before starting planner run.");
-  }
 
   try {
     const langGraphClient = createLangGraphClient({

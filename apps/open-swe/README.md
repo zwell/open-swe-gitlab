@@ -11,3 +11,8 @@ For detailed setup and usage information, see the [development setup documentati
 1. Copy the environment file: `cp .env.example .env` and fill in the required values
 2. Install dependencies: `yarn install`
 3. Start the development server: `yarn dev`
+
+
+## TODO
+1. gitlab版本
+2. 支持更多大模型

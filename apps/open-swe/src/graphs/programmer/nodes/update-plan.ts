@@ -29,7 +29,7 @@ import { createUpdatePlanToolFields } from "@open-swe/shared/open-swe/tools";
 import { formatCustomRulesPrompt } from "../../../utils/custom-rules.js";
 import { trackCachePerformance } from "../../../utils/caching.js";
 import { getModelManager } from "../../../utils/llms/model-manager.js";
-import { addTaskPlanToIssue } from "../../../utils/github/issue-task.js";
+import { addTaskPlanToIssue } from "../../../utils/gitlab/issue-task.js";
 
 const logger = createLogger(LogLevel.INFO, "UpdatePlanNode");
 

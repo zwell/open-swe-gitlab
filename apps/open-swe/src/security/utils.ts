@@ -1,4 +1,4 @@
-const STUDIO_USER_ID = "langgraph-studio-user";
+export const STUDIO_USER_ID = "langgraph-studio-user";
 
 // Helper function to check if user is studio user
 export function isStudioUser(userIdentity: string): boolean {
@@ -24,6 +24,6 @@ export function createWithOwnerMetadata(
 
   value.metadata ??= {};
   value.metadata.owner = user.identity;
-  value.metadata.installation_name = user.metadata.installation_name;
+  value.metadata.installation_name = "";
   return { owner: user.identity };
 }

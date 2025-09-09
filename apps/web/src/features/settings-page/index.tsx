@@ -3,11 +3,11 @@
 import { useQueryState } from "nuqs";
 import { useRouter } from "next/navigation";
 import { Key, Settings, ArrowLeft } from "lucide-react";
-import { GitHubManager } from "./github-manager";
+import { GitLabManager } from "./gitlab-manager";
 import { APIKeysTab } from "./api-keys";
 import { ConfigManager } from "./config-manager";
-import { GitHubSVG } from "@/components/icons/github";
-import { GitHubAppProvider } from "@/providers/GitHubApp";
+import { GitLabSVG } from "@/components/icons/gitlab";
+import { GitLabAppProvider } from "@/providers/GitLabApp";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,12 +15,12 @@ import { cn } from "@/lib/utils";
 export default function SettingsPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useQueryState("tab", {
-    defaultValue: "github" as "github" | "api-keys" | "configuration",
+    defaultValue: "gitlab" as "gitlab" | "api-keys" | "configuration",
     parse: (value: string) => {
-      if (["github", "api-keys", "configuration"].includes(value)) {
-        return value as "github" | "api-keys" | "configuration";
+      if (["gitlab", "api-keys", "configuration"].includes(value)) {
+        return value as "gitlab" | "api-keys" | "configuration";
       }
-      return "github";
+      return "gitlab";
     },
     serialize: (value) => value,
   });
@@ -34,7 +34,7 @@ export default function SettingsPage() {
     );
 
   return (
-    <GitHubAppProvider>
+    <GitLabAppProvider>
       <div className="mx-auto max-w-6xl p-6">
         {/* Header with back button and theme toggle */}
         <div className="mb-6 flex items-center justify-between">
@@ -60,11 +60,11 @@ export default function SettingsPage() {
         <div className="mb-6">
           <div className="border-border bg-muted/50 flex rounded-t-lg border-b">
             <button
-              onClick={() => setActiveTab("github")}
-              className={getTabClassName(activeTab === "github")}
+              onClick={() => setActiveTab("gitlab")}
+              className={getTabClassName(activeTab === "gitlab")}
             >
               <span className="flex items-center gap-2 font-mono">
-                <GitHubSVG
+                <GitLabSVG
                   height="16"
                   width="16"
                 />
@@ -93,11 +93,11 @@ export default function SettingsPage() {
         </div>
 
         <div className="border-border bg-background rounded-b-lg border border-t-0 p-6">
-          {activeTab === "github" && <GitHubManager />}
+          {activeTab === "gitlab" && <GitLabManager />}
           {activeTab === "api-keys" && <APIKeysTab />}
           {activeTab === "configuration" && <ConfigManager />}
         </div>
       </div>
-    </GitHubAppProvider>
+    </GitLabAppProvider>
   );
 }

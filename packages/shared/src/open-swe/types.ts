@@ -22,6 +22,10 @@ import {
   GITHUB_PAT,
   DEFAULT_MCP_SERVERS,
   GITHUB_INSTALLATION_ID,
+  GITLAB_HOST_HEADER,
+  GITLAB_ACCESS_TOKEN_HEADER,
+  GITLAB_USER_ID_HEADER,
+  GITLAB_USER_LOGIN_HEADER,
 } from "../constants.js";
 import { withLangGraph } from "@langchain/langgraph/zod";
 import { BaseMessage } from "@langchain/core/messages";
@@ -663,6 +667,18 @@ export const GraphConfiguration = z.object({
    */
   [GITHUB_PAT]: withLangGraph(z.string().optional(), {
     metadata: GraphConfigurationMetadata[GITHUB_PAT],
+  }),
+  [GITLAB_HOST_HEADER]: withLangGraph(z.string().optional(), {
+    metadata: GraphConfigurationMetadata[GITLAB_HOST_HEADER],
+  }),
+  [GITLAB_ACCESS_TOKEN_HEADER]: withLangGraph(z.string().optional(), {
+    metadata: GraphConfigurationMetadata[GITLAB_ACCESS_TOKEN_HEADER],
+  }),
+  [GITLAB_USER_ID_HEADER]: withLangGraph(z.string().optional(), {
+    metadata: GraphConfigurationMetadata[GITLAB_USER_ID_HEADER],
+  }),
+  [GITLAB_USER_LOGIN_HEADER]: withLangGraph(z.string().optional(), {
+    metadata: GraphConfigurationMetadata[GITLAB_USER_LOGIN_HEADER],
   }),
   /**
    * Custom MCP servers configuration as JSON string. Merges with default servers.

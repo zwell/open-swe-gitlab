@@ -1,7 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import * as crypto from "crypto";
 import { getRepoAbsolutePath } from "@open-swe/shared/git";
-import { getGitHubTokensFromConfig } from "../../utils/github-tokens.js";
 import {
   CustomRules,
   GraphConfig,
@@ -9,7 +8,7 @@ import {
 } from "@open-swe/shared/open-swe/types";
 import { createLogger, LogLevel } from "../../utils/logger.js";
 import { daytonaClient } from "../../utils/sandbox.js";
-import { cloneRepo, pullLatestChanges } from "../../utils/github/git.js";
+import { cloneRepo, pullLatestChanges } from "../../utils/gitlab/git.js";
 import {
   FAILED_TO_GENERATE_TREE_MESSAGE,
   getCodebaseTree,
@@ -93,8 +92,6 @@ export async function initializeSandbox(
     );
   }
 
-  const { githubInstallationToken } = getGitHubTokensFromConfig(config);
-
   if (!sandboxSessionId) {
     emitStepEvent(
       {
@@ -164,9 +161,7 @@ export async function initializeSandbox(
       const pullChangesRes = await pullLatestChanges(
         absoluteRepoDir,
         existingSandbox,
-        {
-          githubInstallationToken,
-        },
+        config,
       );
       if (!pullChangesRes) {
         emitStepEvent(basePullLatestChangesAction, "skipped");
@@ -189,11 +184,7 @@ export async function initializeSandbox(
       };
       emitStepEvent(baseGenerateCodebaseTreeAction, "pending");
       try {
-        const codebaseTree = await getCodebaseTree(
-          existingSandbox.id,
-          undefined,
-          config,
-        );
+        const codebaseTree = await getCodebaseTree(config, existingSandbox.id);
         if (codebaseTree === FAILED_TO_GENERATE_TREE_MESSAGE) {
           emitStepEvent(
             baseGenerateCodebaseTreeAction,
@@ -208,7 +199,11 @@ export async function initializeSandbox(
           sandboxSessionId: existingSandbox.id,
           codebaseTree,
           messages: createEventsMessage(),
-          customRules: await getCustomRules(existingSandbox, absoluteRepoDir),
+          customRules: await getCustomRules(
+            existingSandbox,
+            absoluteRepoDir,
+            config,
+          ),
         };
       } catch {
         emitStepEvent(
@@ -220,7 +215,11 @@ export async function initializeSandbox(
           sandboxSessionId: existingSandbox.id,
           codebaseTree: FAILED_TO_GENERATE_TREE_MESSAGE,
           messages: createEventsMessage(),
-          customRules: await getCustomRules(existingSandbox, absoluteRepoDir),
+          customRules: await getCustomRules(
+            existingSandbox,
+            absoluteRepoDir,
+            config,
+          ),
         };
       }
     } catch {
@@ -281,8 +280,7 @@ export async function initializeSandbox(
   // Retry the clone command up to 3 times. Sometimes, it can timeout if the repo is large.
   const cloneRepoRes = await withRetry(
     async () => {
-      return await cloneRepo(sandbox, targetRepository, {
-        githubInstallationToken,
+      return await cloneRepo(sandbox, targetRepository, config, {
         stateBranchName: branchName,
       });
     },
@@ -347,7 +345,7 @@ export async function initializeSandbox(
   emitStepEvent(baseGenerateCodebaseTreeAction, "pending");
   let codebaseTree: string | undefined;
   try {
-    codebaseTree = await getCodebaseTree(sandbox.id, undefined, config);
+    codebaseTree = await getCodebaseTree(config, sandbox.id);
     emitStepEvent(baseGenerateCodebaseTreeAction, "success");
   } catch (_) {
     emitStepEvent(
@@ -363,7 +361,7 @@ export async function initializeSandbox(
     codebaseTree,
     messages: createEventsMessage(),
     dependenciesInstalled: false,
-    customRules: await getCustomRules(sandbox, absoluteRepoDir),
+    customRules: await getCustomRules(sandbox, absoluteRepoDir, config),
     branchName: newBranchName,
   };
 }
@@ -455,7 +453,7 @@ async function initializeSandboxLocal(
 
   let codebaseTree = undefined;
   try {
-    codebaseTree = await getCodebaseTree(undefined, targetRepository, config);
+    codebaseTree = await getCodebaseTree(config, undefined, targetRepository);
     emitStepEvent(baseGenerateCodebaseTreeAction, "success");
   } catch (_) {
     emitStepEvent(

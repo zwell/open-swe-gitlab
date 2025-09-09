@@ -36,8 +36,8 @@ import {
   STATIC_SYSTEM_INSTRUCTIONS,
 } from "./prompt.js";
 import { getRepoAbsolutePath } from "@open-swe/shared/git";
-import { getMissingMessages } from "../../../../utils/github/issue-messages.js";
-import { getPlansFromIssue } from "../../../../utils/github/issue-task.js";
+import { getMissingMessages } from "../../../../utils/gitlab/issue-messages.js";
+import { getPlansFromIssue } from "../../../../utils/gitlab/issue-task.js";
 import { createGrepTool } from "../../../../tools/grep.js";
 import { createInstallDependenciesTool } from "../../../../tools/install-dependencies.js";
 import { formatCustomRulesPrompt } from "../../../../utils/custom-rules.js";
@@ -255,11 +255,15 @@ async function createToolsAndPrompt(
       anthropic: anthropicModelTools,
       openai: nonAnthropicModelTools,
       "google-genai": nonAnthropicModelTools,
+      qwen: nonAnthropicModelTools,
+      deepseek: nonAnthropicModelTools,
     },
     providerMessages: {
       anthropic: anthropicMessages,
       openai: nonAnthropicMessages,
       "google-genai": nonAnthropicMessages,
+      qwen: nonAnthropicMessages, // 如果您之前添加了 qwen
+      deepseek: nonAnthropicMessages, // 让 DeepSeek 使用与 OpenAI 相同的消息格式
     },
   };
 }

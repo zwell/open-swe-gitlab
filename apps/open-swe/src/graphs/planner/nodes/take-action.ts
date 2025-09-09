@@ -28,7 +28,7 @@ import { createGrepTool } from "../../../tools/grep.js";
 import {
   getChangedFilesStatus,
   stashAndClearChanges,
-} from "../../../utils/github/git.js";
+} from "../../../utils/gitlab/git.js";
 import { getRepoAbsolutePath } from "@open-swe/shared/git";
 import { createScratchpadTool } from "../../../tools/scratchpad.js";
 import { getMcpTools } from "../../../utils/mcp-client.js";

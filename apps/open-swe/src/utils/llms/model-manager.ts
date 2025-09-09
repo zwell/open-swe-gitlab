@@ -47,6 +47,8 @@ export const PROVIDER_FALLBACK_ORDER = [
   "openai",
   "anthropic",
   "google-genai",
+  "qwen",
+  "deepseek",
 ] as const;
 export type Provider = (typeof PROVIDER_FALLBACK_ORDER)[number];
 
@@ -82,6 +84,10 @@ const providerToApiKey = (
       return apiKeys.anthropicApiKey;
     case "google-genai":
       return apiKeys.googleApiKey;
+    case "qwen":
+      return apiKeys.qwenApiKey;
+    case "deepseek":
+      return apiKeys.deepseekApiKey;
     default:
       throw new Error(`Unknown provider: ${providerName}`);
   }
@@ -172,7 +178,7 @@ export class ModelManager {
       : undefined;
 
     let finalMaxTokens = maxTokens ?? 10_000;
-    if (modelName.includes("claude-3-5-haiku")) {
+    if (modelName.includes("claude-3-5-haiku") || provider == "deepseek") {
       finalMaxTokens = finalMaxTokens > 8_192 ? 8_192 : finalMaxTokens;
     }
 
@@ -180,7 +186,6 @@ export class ModelManager {
 
     const modelOptions: InitChatModelArgs = {
       modelProvider: provider,
-      temperature: thinkingModel ? undefined : temperature,
       max_retries: MAX_RETRIES,
       ...(apiKey ? { apiKey } : {}),
       ...(thinkingModel && provider === "anthropic"
@@ -188,7 +193,15 @@ export class ModelManager {
             thinking: { budget_tokens: thinkingBudgetTokens, type: "enabled" },
             maxTokens: thinkingMaxTokens,
           }
-        : { maxTokens: finalMaxTokens }),
+        : modelName.includes("gpt-5")
+          ? {
+              max_completion_tokens: finalMaxTokens,
+              temperature: 1,
+            }
+          : {
+              maxTokens: finalMaxTokens,
+              temperature: thinkingModel ? undefined : temperature,
+            }),
     };
 
     logger.debug("Initializing model", {
@@ -219,8 +232,17 @@ export class ModelManager {
         selectedModelConfig = {
           provider,
           modelName,
-          temperature: defaultConfig.temperature ?? baseConfig.temperature,
-          maxTokens: defaultConfig.maxTokens ?? baseConfig.maxTokens,
+          ...(modelName.includes("gpt-5")
+            ? {
+                max_completion_tokens:
+                  defaultConfig.maxTokens ?? baseConfig.maxTokens,
+                temperature: 1,
+              }
+            : {
+                maxTokens: defaultConfig.maxTokens ?? baseConfig.maxTokens,
+                temperature:
+                  defaultConfig.temperature ?? baseConfig.temperature,
+              }),
           ...(isThinkingModel
             ? {
                 thinkingModel: true,
@@ -247,8 +269,17 @@ export class ModelManager {
 
         const fallbackConfig = {
           ...fallbackModel,
-          temperature: isThinkingModel ? undefined : baseConfig.temperature,
-          maxTokens: baseConfig.maxTokens,
+          ...(fallbackModel.modelName.includes("gpt-5")
+            ? {
+                max_completion_tokens: baseConfig.maxTokens,
+                temperature: 1,
+              }
+            : {
+                maxTokens: baseConfig.maxTokens,
+                temperature: isThinkingModel
+                  ? undefined
+                  : baseConfig.temperature,
+              }),
           ...(isThinkingModel
             ? {
                 thinkingModel: true,
@@ -331,8 +362,15 @@ export class ModelManager {
     return {
       modelName,
       provider: modelProvider as Provider,
-      temperature: taskConfig.temperature,
-      maxTokens: config.configurable?.maxTokens ?? 10_000,
+      ...(modelName.includes("gpt-5")
+        ? {
+            max_completion_tokens: config.configurable?.maxTokens ?? 10_000,
+            temperature: 1,
+          }
+        : {
+            maxTokens: config.configurable?.maxTokens ?? 10_000,
+            temperature: taskConfig.temperature,
+          }),
       thinkingModel,
       thinkingBudgetTokens,
     };
@@ -361,12 +399,26 @@ export class ModelManager {
         [LLMTask.SUMMARIZER]: "gemini-2.5-pro",
       },
       openai: {
-        [LLMTask.PLANNER]: "o3",
-        [LLMTask.PROGRAMMER]: "gpt-4.1",
-        [LLMTask.REVIEWER]: "o3",
-        [LLMTask.ROUTER]: "gpt-4o-mini",
-        [LLMTask.SUMMARIZER]: "gpt-4.1-mini",
+        [LLMTask.PLANNER]: "gpt-5",
+        [LLMTask.PROGRAMMER]: "gpt-5",
+        [LLMTask.REVIEWER]: "gpt-5",
+        [LLMTask.ROUTER]: "gpt-5-nano",
+        [LLMTask.SUMMARIZER]: "gpt-5-mini",
       },
+      "deepseek":{
+        [LLMTask.PLANNER]: "deepseek-chat",
+        [LLMTask.PROGRAMMER]: "deepseek-chat",
+        [LLMTask.REVIEWER]: "deepseek-chat",
+        [LLMTask.ROUTER]: "deepseek-chat",
+        [LLMTask.SUMMARIZER]: "deepseek-chat",
+      },
+      "qwen":{
+        [LLMTask.PLANNER]: "qwen-flash",
+        [LLMTask.PROGRAMMER]: "qwen-flash",
+        [LLMTask.REVIEWER]: "qwen-flash",
+        [LLMTask.ROUTER]: "qwen-flash",
+        [LLMTask.SUMMARIZER]: "qwen-flash",
+      }
     };
 
     const modelName = defaultModels[provider][task];

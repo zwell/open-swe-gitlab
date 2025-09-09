@@ -10,13 +10,15 @@ export function hasApiKeySet(config: Record<string, any>) {
 
   // No providers enabled means user is using default model: anthropic
   if (enabledProviders.length === 0 && !apiKeys.anthropicApiKey) {
-    return false;
+    // return false;
   }
 
   if (
     (enabledProviders.includes("anthropic") && !apiKeys.anthropicApiKey) ||
     (enabledProviders.includes("openai") && !apiKeys.openaiApiKey) ||
-    (enabledProviders.includes("google-genai") && !apiKeys.googleApiKey)
+    (enabledProviders.includes("google-genai") && !apiKeys.googleApiKey) ||
+    (enabledProviders.includes("deepseek") && !apiKeys.deepseekApiKey) ||
+    (enabledProviders.includes("qwen") && !apiKeys.qwenApiKey)
   ) {
     return false;
   }

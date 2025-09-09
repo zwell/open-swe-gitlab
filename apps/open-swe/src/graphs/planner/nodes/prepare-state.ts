@@ -3,8 +3,8 @@ import {
   PlannerGraphUpdate,
 } from "@open-swe/shared/open-swe/planner/types";
 import { Command } from "@langchain/langgraph";
-import { getGitHubTokensFromConfig } from "../../../utils/github-tokens.js";
-import { getIssue, getIssueComments } from "../../../utils/github/api.js";
+import { getGitLabConfigFromConfig } from "../../../utils/gitlab-tokens.js";
+import { getIssue, getIssueComments } from "../../../utils/gitlab/api.js";
 import { v4 as uuidv4 } from "uuid";
 import {
   AIMessage,
@@ -17,7 +17,7 @@ import { GraphConfig } from "@open-swe/shared/open-swe/types";
 import {
   getMessageContentFromIssue,
   getUntrackedComments,
-} from "../../../utils/github/issue-messages.js";
+} from "../../../utils/gitlab/issue-messages.js";
 import { filterHiddenMessages } from "../../../utils/message/filter-hidden.js";
 import { DO_NOT_RENDER_ID_PREFIX } from "@open-swe/shared/constants";
 import { isLocalMode } from "@open-swe/shared/open-swe/local-mode";
@@ -34,17 +34,18 @@ export async function prepareGraphState(
     });
   }
   if (!state.githubIssueId) {
-    throw new Error("No github issue id provided");
+    throw new Error("No issue id provided");
   }
   if (!state.targetRepository) {
     throw new Error("No target repository provided");
   }
-  const { githubInstallationToken } = getGitHubTokensFromConfig(config);
+  const { token, host } = getGitLabConfigFromConfig(config);
   const baseGetIssueInputs = {
     owner: state.targetRepository.owner,
     repo: state.targetRepository.repo,
     issueNumber: state.githubIssueId,
-    githubInstallationToken,
+    token,
+    host,
   };
   const [issue, comments] = await Promise.all([
     getIssue(baseGetIssueInputs),

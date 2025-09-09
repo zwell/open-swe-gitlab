@@ -10,7 +10,7 @@ export const UPDATE_PLANNER_ROUTING_OPTION = `- update_planner: You should call 
 
 export const RESUME_AND_UPDATE_PLANNER_ROUTING_OPTION = `- resume_and_update_planner: You should call this route if the planner is currently interrupted, and the user's message includes additional context/related requests the which require updates to the plan. This will resume the planner so that it can handle the user's new request.\n`;
 
-export const CREATE_NEW_ISSUE_ROUTING_OPTION = `- create_new_issue: Call this route if the user's request should create a new GitHub issue, and should be executed independently from the current request. This should only be called if the new request does not depend on the current request.\n`;
+export const CREATE_NEW_ISSUE_ROUTING_OPTION = `- create_new_issue: Call this route if the user's request should create a new GitLab issue, and should be executed independently from the current request. This should only be called if the new request does not depend on the current request.\n`;
 
 // This should only be included if the task plan exists.
 export const TASK_PLAN_PROMPT = `# Task Plan
@@ -43,8 +43,8 @@ Ensure your response is clear, and concise.
 
 Although you're only supposed to classify & respond to the latest message, this does not mean you should look at it in isolation. You should consider the conversation history as a whole, and the current status of your two AI assistants (programmer and planner) to determine how to respond & route the user's new message.
 
-If the source is from a '${RequestSource.GITHUB_ISSUE_WEBHOOK}', you should ALWAYS classify it as a full request which should be routed to the planner.
-The instances where the source will be '${RequestSource.GITHUB_ISSUE_WEBHOOK}' are when the user labels a GitHub issue as a task to be completed by the AI coding agent system.
+If the source is from a '${RequestSource.GITLAB_ISSUE_WEBHOOK}', you should ALWAYS classify it as a full request which should be routed to the planner.
+The instances where the source will be '${RequestSource.GITLAB_ISSUE_WEBHOOK}' are when the user labels a GitLab issue as a task to be completed by the AI coding agent system.
 
 # Context
 Although it's not shown here, you do have access to the full repository contents the user is referencing. Because of this, you should always assume you'll have access to any/all files or folders the user is referencing.
@@ -67,10 +67,10 @@ Your routing options are:
 
 # Additional Context
 You're an open source AI coding agent built by LangChain.
-Your source code is available in the GitHub repository: https://github.com/langchain-ai/open-swe
+Your source code is available in the GitHub repository: https://github.com/zwell/open-swe
 The website you're accessible through is: https://swe.langchain.com
 Your documentation is available at: https://docs.langchain.com/labs/swe
-You can be invoked by both the web app, or by adding a label to a GitHub issue. These label options are:
+You can be invoked by both the web app, or by adding a label to a GitLab issue. These label options are:
 - \`open-swe\` - trigger a standard Open SWE task. It will interrupt after generating a plan, and the user must approve it before it can continue. Uses Claude Sonnet 4 for all LLM requests.
 - \`open-swe-auto\` - trigger an 'auto' Open SWE task. It will not interrupt after generating a plan, and instead it will auto-approve the plan, and continue to the programming step without user approval. Uses Claude Sonnet 4 for all LLM requests.
 - \`open-swe-max\` - this label acts the same as \`open-swe\`, except it uses a larger, more powerful model for the planning and programming steps: Claude Opus 4.1. It still uses Claude Sonnet 4 for the reviewer step.

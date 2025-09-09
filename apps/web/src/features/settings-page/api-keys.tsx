@@ -43,6 +43,8 @@ const API_KEY_DEFINITIONS = {
     { id: "anthropicApiKey", name: "Anthropic" },
     { id: "openaiApiKey", name: "OpenAI" },
     { id: "googleApiKey", name: "Google Gen AI" },
+    { id: "deepseekApiKey", name: "DeepSeek" },
+    { id: "qwenApiKey", name: "通义千问" },
   ],
   // infrastructure: [
   //   {

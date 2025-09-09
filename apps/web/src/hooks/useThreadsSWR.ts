@@ -1,82 +1,53 @@
+// src/hooks/useThreadsSWR.ts (GitLab 最终正确版)
+
 import useSWR from "swr";
 import { Thread } from "@langchain/langgraph-sdk";
-import { createClient } from "@/providers/client";
+import { createClient } from "@/providers/client"; // 假设这个 client 是平台无关的
 import { THREAD_SWR_CONFIG } from "@/lib/swr-config";
 import { ManagerGraphState } from "@open-swe/shared/open-swe/manager/types";
 import { PlannerGraphState } from "@open-swe/shared/open-swe/planner/types";
 import { ReviewerGraphState } from "@open-swe/shared/open-swe/reviewer/types";
 import { GraphState } from "@open-swe/shared/open-swe/types";
+
 import { useMemo, useState } from "react";
-import type { Installation } from "./useGitHubInstallations";
+
 
 type ThreadSortBy = "thread_id" | "status" | "created_at" | "updated_at";
 type SortOrder = "asc" | "desc";
-/**
- * Union type representing all possible graph states in the Open SWE system
- */
 export type AnyGraphState =
-  | ManagerGraphState
-  | PlannerGraphState
-  | ReviewerGraphState
-  | GraphState;
+    | ManagerGraphState
+    | PlannerGraphState
+    | ReviewerGraphState
+    | GraphState;
 
 interface UseThreadsSWROptions {
   assistantId?: string;
   refreshInterval?: number;
   revalidateOnFocus?: boolean;
   revalidateOnReconnect?: boolean;
-  currentInstallation?: Installation | null;
-  disableOrgFiltering?: boolean;
-  /**
-   * Pagination options
-   */
+  // ✨ 1. 移除了 currentInstallation 和 disableOrgFiltering
   pagination?: {
-    /**
-     * Maximum number of threads to return.
-     * @default 25
-     */
     limit?: number;
-    /**
-     * Offset to start from.
-     * @default 0
-     */
     offset?: number;
-    /**
-     * Sort by.
-     * @default "updated_at"
-     */
     sortBy?: ThreadSortBy;
-    /**
-     * Sort order.
-     * Must be one of 'asc' or 'desc'.
-     * @default "desc"
-     */
     sortOrder?: SortOrder;
   };
 }
 
-/**
- * Hook for fetching threads for any graph type.
- * Works with all graph states (Manager, Planner, Programmer, Reviewer)
- * by passing the appropriate assistantId.
- *
- * For UI display of manager threads, use `threadsToMetadata(threads)` utility to convert
- * raw threads to ThreadMetadata objects.
- */
 export function useThreadsSWR<
-  TGraphState extends AnyGraphState = AnyGraphState,
+    TGraphState extends AnyGraphState = AnyGraphState,
 >(options: UseThreadsSWROptions = {}) {
   const {
     assistantId,
     refreshInterval = THREAD_SWR_CONFIG.refreshInterval,
     revalidateOnFocus = THREAD_SWR_CONFIG.revalidateOnFocus,
     revalidateOnReconnect = THREAD_SWR_CONFIG.revalidateOnReconnect,
-    currentInstallation,
-    disableOrgFiltering,
     pagination,
   } = options;
-  const [hasMoreState, setHasMoreState] = useState(true);
 
+  // ✨ 2. 移除了 hasMoreState，因为 search 方法的返回值本身就可以判断
+
+  // 分页和排序的默认值逻辑保持不变
   const paginationWithDefaults = {
     limit: 25,
     offset: 0,
@@ -85,9 +56,9 @@ export function useThreadsSWR<
     ...pagination,
   };
 
-  const apiUrl: string | undefined = process.env.NEXT_PUBLIC_API_URL ?? "";
+  const apiUrl: string = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-  // Create a unique key for SWR caching based on assistantId and pagination parameters
+  // SWR key 的构建逻辑保持不变，它已经是通用的了
   const swrKey = useMemo(() => {
     const baseKey = assistantId ? ["threads", assistantId] : ["threads", "all"];
     if (pagination) {
@@ -102,67 +73,38 @@ export function useThreadsSWR<
     return baseKey;
   }, [assistantId, paginationWithDefaults]);
 
+  // Fetcher 函数逻辑基本不变
   const fetcher = async (): Promise<Thread<TGraphState>[]> => {
-    if (!apiUrl) {
-      throw new Error("API URL is not configured");
-    }
+    if (!apiUrl) throw new Error("API URL is not configured");
 
     const client = createClient(apiUrl);
     const searchArgs = assistantId
-      ? {
-          metadata: {
-            graph_id: assistantId,
-          },
-          ...(paginationWithDefaults ? paginationWithDefaults : {}),
-        }
-      : paginationWithDefaults
-        ? paginationWithDefaults
-        : undefined;
+        ? { metadata: { graph_id: assistantId }, ...paginationWithDefaults }
+        : paginationWithDefaults;
 
+    // ✨ client.threads.search 返回的就是过滤后的线程，不需要前端再处理
     return await client.threads.search<TGraphState>(searchArgs);
   };
 
   const { data, error, isLoading, mutate, isValidating } = useSWR(
-    swrKey,
-    fetcher,
-    {
-      refreshInterval,
-      revalidateOnFocus,
-      revalidateOnReconnect,
-      errorRetryCount: THREAD_SWR_CONFIG.errorRetryCount,
-      errorRetryInterval: THREAD_SWR_CONFIG.errorRetryInterval,
-      dedupingInterval: THREAD_SWR_CONFIG.dedupingInterval,
-    },
+      swrKey,
+      fetcher,
+      {
+        // SWR 配置保持不变
+        ...THREAD_SWR_CONFIG,
+        refreshInterval,
+        revalidateOnFocus,
+        revalidateOnReconnect,
+      },
   );
 
-  const threads = useMemo(() => {
-    const allThreads = data ?? [];
+  // ✨ 3. threads 的计算逻辑大大简化 ✨
+  // 我们不再需要根据 currentInstallation 进行客户端过滤
+  const threads = data ?? [];
 
-    if (disableOrgFiltering) {
-      return allThreads;
-    }
-
-    if (!allThreads.length) {
-      setHasMoreState(false);
-    }
-
-    if (!currentInstallation) {
-      setHasMoreState(false);
-      return [];
-    }
-
-    return allThreads.filter((thread) => {
-      const threadInstallationName = thread.metadata?.installation_name;
-      return (
-        typeof threadInstallationName === "string" &&
-        threadInstallationName === currentInstallation.accountName
-      );
-    });
-  }, [data, currentInstallation, disableOrgFiltering]);
-
-  const hasMore = useMemo(() => {
-    return hasMoreState && !!threads.length;
-  }, [threads, paginationWithDefaults]);
+  // ✨ 4. hasMore 的计算逻辑也更直接 ✨
+  // 如果返回的线程数小于请求的 limit，说明没有更多了
+  const hasMore = threads.length === paginationWithDefaults.limit;
 
   return {
     threads,

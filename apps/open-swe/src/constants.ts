@@ -26,4 +26,5 @@ export const LANGGRAPH_USER_PERMISSIONS = [
 
 export enum RequestSource {
   GITHUB_ISSUE_WEBHOOK = "github_issue_webhook",
+  GITLAB_ISSUE_WEBHOOK = "gitlab_issue_webhook",
 }

@@ -11,11 +11,11 @@ import {
   checkoutBranchAndCommit,
   getChangedFilesStatus,
   pushEmptyCommit,
-} from "../../../utils/github/git.js";
+} from "../../../utils/gitlab/git.js";
 import {
   createPullRequest,
   markPullRequestReadyForReview,
-} from "../../../utils/github/api.js";
+} from "../../../utils/gitlab/api.js";
 import { createLogger, LogLevel } from "../../../utils/logger.js";
 import { z } from "zod";
 import {
@@ -30,23 +30,20 @@ import {
   deleteSandbox,
   getSandboxWithErrorHandling,
 } from "../../../utils/sandbox.js";
-import { getGitHubTokensFromConfig } from "../../../utils/github-tokens.js";
+import { getGitLabConfigFromConfig } from "../../../utils/gitlab-tokens.js";
 import {
   getActivePlanItems,
   getPullRequestNumberFromActiveTask,
 } from "@open-swe/shared/open-swe/tasks";
-import {
-  isLocalMode,
-  getLocalWorkingDirectory,
-} from "@open-swe/shared/open-swe/local-mode";
 import { createOpenPrToolFields } from "@open-swe/shared/open-swe/tools";
 import { trackCachePerformance } from "../../../utils/caching.js";
 import { getModelManager } from "../../../utils/llms/model-manager.js";
 import {
-  GitHubPullRequest,
-  GitHubPullRequestList,
-  GitHubPullRequestUpdate,
-} from "../../../utils/github/types.js";
+  GitLabMergeRequest,
+  // GitHubPullRequestList,
+  // GitHubPullRequestUpdate,
+} from "../../../utils/gitlab/types.js";
+import { getRepoAbsolutePath } from "@open-swe/shared/git";
 
 const logger = createLogger(LogLevel.INFO, "Open PR");
 
@@ -95,7 +92,7 @@ export async function openPullRequest(
   state: GraphState,
   config: GraphConfig,
 ): Promise<GraphUpdate> {
-  const { githubInstallationToken } = getGitHubTokensFromConfig(config);
+  const { host, token } = getGitLabConfigFromConfig(config);
 
   const { sandbox, codebaseTree, dependenciesInstalled } =
     await getSandboxWithErrorHandling(
@@ -117,29 +114,25 @@ export async function openPullRequest(
   let branchName = state.branchName;
   let updatedTaskPlan: TaskPlan | undefined;
 
-  // Only check for changed files and commit in local mode
-  if (isLocalMode(config)) {
-    const repoPath = getLocalWorkingDirectory();
-    const changedFiles = await getChangedFilesStatus(repoPath, sandbox, config);
+  const repoPath = getRepoAbsolutePath(state.targetRepository);
+  const changedFiles = await getChangedFilesStatus(repoPath, sandbox, config);
 
-    if (changedFiles.length > 0) {
-      logger.info(`Has ${changedFiles.length} changed files. Committing.`, {
-        changedFiles,
-      });
-      const result = await checkoutBranchAndCommit(
-        config,
-        state.targetRepository,
-        sandbox,
-        {
-          branchName,
-          githubInstallationToken,
-          taskPlan: state.taskPlan,
-          githubIssueId: state.githubIssueId,
-        },
-      );
-      branchName = result.branchName;
-      updatedTaskPlan = result.updatedTaskPlan;
-    }
+  if (changedFiles.length > 0) {
+    logger.info(`Has ${changedFiles.length} changed files. Committing.`, {
+      changedFiles,
+    });
+    const result = await checkoutBranchAndCommit(
+      config,
+      state.targetRepository,
+      sandbox,
+      {
+        branchName,
+        taskPlan: state.taskPlan,
+        githubIssueId: state.githubIssueId,
+      },
+    );
+    branchName = result.branchName;
+    updatedTaskPlan = result.updatedTaskPlan;
   }
 
   const openPrTool = createOpenPrToolFields();
@@ -179,9 +172,7 @@ export async function openPullRequest(
   }
 
   if (process.env.SKIP_CI_UNTIL_LAST_COMMIT === "true") {
-    await pushEmptyCommit(state.targetRepository, sandbox, {
-      githubInstallationToken,
-    });
+    await pushEmptyCommit(state.targetRepository, sandbox, config);
   }
 
   const { title, body } = toolCall.args as z.infer<typeof openPrTool.schema>;
@@ -190,9 +181,9 @@ export async function openPullRequest(
     updatedTaskPlan ?? state.taskPlan,
   );
   let pullRequest:
-    | GitHubPullRequest
-    | GitHubPullRequestList[number]
-    | GitHubPullRequestUpdate
+    | GitLabMergeRequest
+    // | GitHubPullRequestList[number]
+    // | GitHubPullRequestUpdate
     | null = null;
   if (!prForTask) {
     // No PR created yet. Shouldn't be possible, but we have a condition here anyway
@@ -202,19 +193,20 @@ export async function openPullRequest(
       headBranch: branchName,
       title,
       body: `Fixes #${state.githubIssueId}\n\n${body}`,
-      githubInstallationToken,
-      baseBranch:
-        state.targetRepository.baseCommit ?? state.targetRepository.branch,
+      host,
+      token,
+      baseBranch: state.targetRepository.branch,
     });
   } else {
     // Ensure the PR is ready for review
     pullRequest = await markPullRequestReadyForReview({
       owner,
       repo,
-      title,
-      body: `Fixes #${state.githubIssueId}\n\n${body}`,
-      pullNumber: prForTask,
-      githubInstallationToken,
+      // title,
+      // body: `Fixes #${state.githubIssueId}\n\n${body}`,
+      mergeRequestIid: state.githubIssueId,
+      host,
+      token,
     });
   }
 

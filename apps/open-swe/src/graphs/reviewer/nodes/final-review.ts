@@ -24,7 +24,7 @@ import {
 import { LLMTask } from "@open-swe/shared/open-swe/llm-task";
 import { GraphConfig, PlanItem } from "@open-swe/shared/open-swe/types";
 import { z } from "zod";
-import { addTaskPlanToIssue } from "../../../utils/github/issue-task.js";
+import { addTaskPlanToIssue } from "../../../utils/gitlab/issue-task.js";
 import { getMessageString } from "../../../utils/message/content.js";
 import {
   AIMessage,

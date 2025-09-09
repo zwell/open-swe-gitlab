@@ -20,7 +20,7 @@ import {
   CustomNodeEvent,
   REQUEST_HELP_NODE_ID,
 } from "@open-swe/shared/open-swe/custom-node-events";
-import { postGitHubIssueComment } from "../../../utils/github/plan.js";
+import { postIssueComment } from "../../../utils/gitlab/plan.js";
 
 const constructDescription = (helpRequest: string): string => {
   return `The agent has requested help. Here is the help request:
@@ -84,7 +84,7 @@ ${toolCall.args.help_request}
 
 Please check the Open SWE interface to respond to this request.`;
 
-  await postGitHubIssueComment({
+  await postIssueComment({
     githubIssueId: state.githubIssueId,
     targetRepository: state.targetRepository,
     commentBody,

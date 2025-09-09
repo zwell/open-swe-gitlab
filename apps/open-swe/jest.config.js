@@ -16,6 +16,6 @@ export default {
   extensionsToTreatAsEsm: [".ts"],
   setupFiles: ["dotenv/config"],
   passWithNoTests: true,
-  testTimeout: 7200_000,
+  testTimeout: 20_000,
   testMatch: ["<rootDir>/src/**/*.test.ts"],
 };

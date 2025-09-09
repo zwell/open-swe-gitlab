@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getGitHubToken } from "@/lib/auth";
-import { verifyGithubUser } from "@open-swe/shared/github/verify-user";
+import { verifyGitlabUser } from "@open-swe/shared/gitlab/verify-user";
+import {GITLAB_HOST_COOKIE, GITLAB_TOKEN_COOKIE} from "@open-swe/shared/constants";
 
 export async function GET(request: NextRequest) {
   try {
-    const token = getGitHubToken(request);
-    if (!token || !token.access_token) {
+    const token = request.cookies.get(GITLAB_TOKEN_COOKIE)?.value;
+    const host = request.cookies.get(GITLAB_HOST_COOKIE)?.value;
+    if (!token || !host) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
-    const user = await verifyGithubUser(token.access_token);
+    const user = await verifyGitlabUser(token, host);
     if (!user) {
       return NextResponse.json(
         { error: "Invalid GitHub token" },

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { GitHubSVG } from "@/components/icons/github";
+import { GitLabSVG } from "@/components/icons/gitlab";
 
 interface InstallAppButtonProps {
   variant?:
@@ -42,7 +42,7 @@ export function InstallAppButton({
         "Installing..."
       ) : (
         <>
-          <GitHubSVG
+          <GitLabSVG
             width="16"
             height="16"
           />

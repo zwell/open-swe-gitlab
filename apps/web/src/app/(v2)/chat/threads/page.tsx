@@ -141,7 +141,7 @@ function AllThreadsPageContent() {
             </div>
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              <UserPopover />
+              {/*<UserPopover />*/}
             </div>
           </div>
         </div>

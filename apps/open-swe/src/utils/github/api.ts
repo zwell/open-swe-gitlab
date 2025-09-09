@@ -579,9 +579,7 @@ export async function getBranch({
         repo,
         branch: branchName,
       });
-      logger.info("Branch", {
-        branch,
-      });
+
       return branch;
     },
     githubInstallationToken,

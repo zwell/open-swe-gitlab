@@ -1,6 +1,6 @@
 import { Dispatch, SetStateAction } from "react";
 import { Card, CardDescription, CardHeader, CardTitle } from "../ui/card";
-import { GitHubSVG } from "../icons/github";
+import { GitLabSVG } from "../icons/gitlab";
 
 const GENERATE_RULES_PROMPT = `You're given a task to write a collection of rules, context and guidelines on the repository you're provided. Please gather context on the following categories, then write an \`AGENTS.md\` file in the root of the repository.
 
@@ -94,7 +94,7 @@ function RepositoryTemplateQuickAction(props: {
           <CardTitle className="text-foreground text-sm">
             {props.title}
             <p className="text-foreground/80 mt-1 flex items-center gap-1 font-mono text-xs">
-              <GitHubSVG
+              <GitLabSVG
                 width="12"
                 height="12"
                 className="flex-shrink-0"

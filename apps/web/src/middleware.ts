@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  GITHUB_TOKEN_COOKIE,
-  GITHUB_INSTALLATION_ID_COOKIE,
+  GITLAB_HOST_COOKIE, GITLAB_TOKEN_COOKIE,
 } from "@open-swe/shared/constants";
-import { verifyGithubUser } from "@open-swe/shared/github/verify-user";
+// import { verifyGithubUser } from "@open-swe/shared/github/verify-user";
+import { verifyGitlabUser } from "@open-swe/shared/gitlab/verify-user";
 
 export async function middleware(request: NextRequest) {
-  const token = request.cookies.get(GITHUB_TOKEN_COOKIE)?.value;
-  const installationId = request.cookies.get(
-    GITHUB_INSTALLATION_ID_COOKIE,
-  )?.value;
-  const user = token && installationId ? await verifyGithubUser(token) : null;
+  const token = request.cookies.get(GITLAB_TOKEN_COOKIE)?.value;
+  const host = request.cookies.get(GITLAB_HOST_COOKIE)?.value;
+
+  const user = token && host ? await verifyGitlabUser(token, host) : null;
 
   if (request.nextUrl.pathname === "/") {
     if (user) {

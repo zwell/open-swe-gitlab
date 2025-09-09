@@ -1,45 +1,25 @@
-import {
-  getModelManager,
-  loadModel,
-  supportsParallelToolCallsParam,
-} from "../../../../utils/llms/index.js";
-import { LLMTask } from "@open-swe/shared/open-swe/llm-task";
-import {
-  createGetURLContentTool,
-  createShellTool,
-  createSearchDocumentForTool,
-} from "../../../../tools/index.js";
-import {
-  PlannerGraphState,
-  PlannerGraphUpdate,
-} from "@open-swe/shared/open-swe/planner/types";
-import { GraphConfig } from "@open-swe/shared/open-swe/types";
-import { createLogger, LogLevel } from "../../../../utils/logger.js";
-import { getMessageContentString } from "@open-swe/shared/messages";
-import {
-  formatFollowupMessagePrompt,
-  isFollowupRequest,
-} from "../../utils/followup.js";
-import { SYSTEM_PROMPT } from "./prompt.js";
-import { getRepoAbsolutePath } from "@open-swe/shared/git";
-import {
-  isLocalMode,
-  getLocalWorkingDirectory,
-} from "@open-swe/shared/open-swe/local-mode";
-import { getMissingMessages } from "../../../../utils/github/issue-messages.js";
-import { getPlansFromIssue } from "../../../../utils/github/issue-task.js";
-import { createGrepTool } from "../../../../tools/grep.js";
-import { formatCustomRulesPrompt } from "../../../../utils/custom-rules.js";
-import { createScratchpadTool } from "../../../../tools/scratchpad.js";
-import { getMcpTools } from "../../../../utils/mcp-client.js";
-import { filterMessagesWithoutContent } from "../../../../utils/message/content.js";
-import { getScratchpad } from "../../utils/scratchpad-notes.js";
-import { formatUserRequestPrompt } from "../../../../utils/user-request.js";
-import {
-  convertMessagesToCacheControlledMessages,
-  trackCachePerformance,
-} from "../../../../utils/caching.js";
-import { createViewTool } from "../../../../tools/builtin-tools/view.js";
+import {getModelManager, loadModel, supportsParallelToolCallsParam,} from "../../../../utils/llms/index.js";
+import {LLMTask} from "@open-swe/shared/open-swe/llm-task";
+import {createGetURLContentTool, createSearchDocumentForTool, createShellTool,} from "../../../../tools/index.js";
+import {PlannerGraphState, PlannerGraphUpdate,} from "@open-swe/shared/open-swe/planner/types";
+import {GraphConfig} from "@open-swe/shared/open-swe/types";
+import {createLogger, LogLevel} from "../../../../utils/logger.js";
+import {getMessageContentString} from "@open-swe/shared/messages";
+import {formatFollowupMessagePrompt, isFollowupRequest,} from "../../utils/followup.js";
+import {SYSTEM_PROMPT} from "./prompt.js";
+import {getRepoAbsolutePath} from "@open-swe/shared/git";
+import {getLocalWorkingDirectory, isLocalMode,} from "@open-swe/shared/open-swe/local-mode";
+import {getMissingMessages} from "../../../../utils/gitlab/issue-messages.js";
+import {getPlansFromIssue} from "../../../../utils/gitlab/issue-task.js";
+import {createGrepTool} from "../../../../tools/grep.js";
+import {formatCustomRulesPrompt} from "../../../../utils/custom-rules.js";
+import {createScratchpadTool} from "../../../../tools/scratchpad.js";
+import {getMcpTools} from "../../../../utils/mcp-client.js";
+import {filterMessagesWithoutContent} from "../../../../utils/message/content.js";
+import {getScratchpad} from "../../utils/scratchpad-notes.js";
+import {formatUserRequestPrompt} from "../../../../utils/user-request.js";
+import {convertMessagesToCacheControlledMessages, trackCachePerformance,} from "../../../../utils/caching.js";
+import {createViewTool} from "../../../../tools/builtin-tools/view.js";
 
 const logger = createLogger(LogLevel.INFO, "GeneratePlanningMessageNode");
 
@@ -139,6 +119,16 @@ export async function generateAction(
 
   const inputMessagesWithCache =
     convertMessagesToCacheControlledMessages(inputMessages);
+  const newMessages = inputMessagesWithCache.map(item => {
+    // deepseek 只支持text
+    if (modelName.startsWith("deepseek") && Array.isArray(item.content)) {
+      item.content = item.content
+          .filter(c => c && typeof c === "object" && "text" in c)
+          .map(c => c?.text)
+          .join("")
+    }
+    return item;
+  })
   const response = await modelWithTools
     .withConfig({ tags: ["nostream"] })
     .invoke([
@@ -152,7 +142,7 @@ export async function generateAction(
           config,
         ),
       },
-      ...inputMessagesWithCache,
+      ...newMessages,
     ]);
 
   logger.info("Generated planning message", {

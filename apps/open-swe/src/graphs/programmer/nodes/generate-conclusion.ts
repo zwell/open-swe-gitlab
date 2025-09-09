@@ -15,7 +15,7 @@ import {
   getActivePlanItems,
   getActiveTask,
 } from "@open-swe/shared/open-swe/tasks";
-import { addTaskPlanToIssue } from "../../../utils/github/issue-task.js";
+import { addTaskPlanToIssue } from "../../../utils/gitlab/issue-task.js";
 import { trackCachePerformance } from "../../../utils/caching.js";
 import { getModelManager } from "../../../utils/llms/model-manager.js";
 import { isLocalMode } from "@open-swe/shared/open-swe/local-mode";

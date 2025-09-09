@@ -2,7 +2,8 @@
 
 import { Toaster } from "@/components/ui/sonner";
 import React from "react";
-import AuthStatus from "@/components/github/auth-status";
+// import AuthStatus from "@/components/github/auth-status";
+import AuthStatus from "@/components/gitlab/auth-status";
 
 export default function Page(): React.ReactNode {
   return (

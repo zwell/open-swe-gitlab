@@ -17,7 +17,7 @@ import {
   getRemainingPlanItems,
 } from "../../../utils/current-task.js";
 import { isAIMessage, ToolMessage } from "@langchain/core/messages";
-import { addTaskPlanToIssue } from "../../../utils/github/issue-task.js";
+import { addTaskPlanToIssue } from "../../../utils/gitlab/issue-task.js";
 import { createMarkTaskCompletedToolFields } from "@open-swe/shared/open-swe/tools";
 import {
   calculateConversationHistoryTokenCount,

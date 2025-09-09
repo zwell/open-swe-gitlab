@@ -10,7 +10,7 @@ import {
   supportsParallelToolCallsParam,
 } from "../../../utils/llms/index.js";
 import { LLMTask } from "@open-swe/shared/open-swe/llm-task";
-import { getMissingMessages } from "../../../utils/github/issue-messages.js";
+import { getMissingMessages } from "../../../utils/gitlab/issue-messages.js";
 import { getMessageString } from "../../../utils/message/content.js";
 import { isHumanMessage } from "@langchain/core/messages";
 import { getMessageContentString } from "@open-swe/shared/messages";

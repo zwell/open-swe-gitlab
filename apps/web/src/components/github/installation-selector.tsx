@@ -6,7 +6,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { GitHubSVG } from "@/components/icons/github";
+import { GitLabSVG } from "@/components/icons/gitlab";
 import { useGitHubAppProvider } from "@/providers/GitHubApp";
 import { cn } from "@/lib/utils";
 import { Building2, User } from "lucide-react";
@@ -54,7 +54,7 @@ export function InstallationSelector({
         className={cn("min-w-[200px]", className)}
       >
         <div className="flex items-center gap-2">
-          <GitHubSVG />
+          <GitLabSVG />
           <span>Loading...</span>
         </div>
       </Button>
@@ -70,7 +70,7 @@ export function InstallationSelector({
         className={cn("text-destructive min-w-[200px]", className)}
       >
         <div className="flex items-center gap-2">
-          <GitHubSVG />
+          <GitLabSVG />
           <span>Error loading installations</span>
         </div>
       </Button>
@@ -86,7 +86,7 @@ export function InstallationSelector({
         className={cn("text-muted-foreground min-w-[200px]", className)}
       >
         <div className="flex items-center gap-2">
-          <GitHubSVG />
+          <GitLabSVG />
           <span>No installations found</span>
         </div>
       </Button>

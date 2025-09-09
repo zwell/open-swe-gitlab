@@ -22,13 +22,12 @@ import { createGrepTool } from "../../../tools/grep.js";
 import {
   checkoutBranchAndCommit,
   getChangedFilesStatus,
-} from "../../../utils/github/git.js";
+} from "../../../utils/gitlab/git.js";
 import { getSandboxWithErrorHandling } from "../../../utils/sandbox.js";
 import { isLocalMode } from "@open-swe/shared/open-swe/local-mode";
 import { Command } from "@langchain/langgraph";
 import { shouldDiagnoseError } from "../../../utils/tool-message-error.js";
 import { filterHiddenMessages } from "../../../utils/message/filter-hidden.js";
-import { getGitHubTokensFromConfig } from "../../../utils/github-tokens.js";
 import { createScratchpadTool } from "../../../tools/scratchpad.js";
 import { getActiveTask } from "@open-swe/shared/open-swe/tasks";
 import { createPullRequestToolCallMessage } from "../../../utils/message/create-pr-message.js";
@@ -183,14 +182,12 @@ export async function takeReviewerActions(
         changedFiles,
       });
 
-      const { githubInstallationToken } = getGitHubTokensFromConfig(config);
       const result = await checkoutBranchAndCommit(
         config,
         state.targetRepository,
         sandbox,
         {
           branchName,
-          githubInstallationToken,
           taskPlan: state.taskPlan,
           githubIssueId: state.githubIssueId,
         },

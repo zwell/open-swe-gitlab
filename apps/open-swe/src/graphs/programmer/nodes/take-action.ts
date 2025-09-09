@@ -18,7 +18,7 @@ import {
 import {
   checkoutBranchAndCommit,
   getChangedFilesStatus,
-} from "../../../utils/github/git.js";
+} from "../../../utils/gitlab/git.js";
 import {
   safeSchemaToString,
   safeBadArgsError,
@@ -35,7 +35,6 @@ import { isLocalMode } from "@open-swe/shared/open-swe/local-mode";
 import { createGrepTool } from "../../../tools/grep.js";
 import { getMcpTools } from "../../../utils/mcp-client.js";
 import { shouldDiagnoseError } from "../../../utils/tool-message-error.js";
-import { getGitHubTokensFromConfig } from "../../../utils/github-tokens.js";
 import { processToolCallContent } from "../../../utils/tool-output-processing.js";
 import { getActiveTask } from "@open-swe/shared/open-swe/tasks";
 import { createPullRequestToolCallMessage } from "../../../utils/message/create-pr-message.js";
@@ -238,14 +237,12 @@ export async function takeAction(
         changedFiles,
       });
 
-      const { githubInstallationToken } = getGitHubTokensFromConfig(config);
       const result = await checkoutBranchAndCommit(
         config,
         state.targetRepository,
         sandbox,
         {
           branchName,
-          githubInstallationToken,
           taskPlan: state.taskPlan,
           githubIssueId: state.githubIssueId,
         },
@@ -263,7 +260,7 @@ export async function takeAction(
     ...toolCallResults,
   ]);
 
-  const codebaseTree = await getCodebaseTree(undefined, undefined, config);
+  const codebaseTree = await getCodebaseTree(config);
   // If the codebase tree failed to generate, fallback to the previous codebase tree, or if that's not defined, use the failed to generate message.
   const codebaseTreeToReturn =
     codebaseTree === FAILED_TO_GENERATE_TREE_MESSAGE

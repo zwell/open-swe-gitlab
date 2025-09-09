@@ -16,7 +16,7 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import type { TargetRepository } from "@open-swe/shared/open-swe/types";
-import { GitHubSVG } from "@/components/icons/github";
+import { GitLabSVG } from "@/components/icons/gitlab";
 import { Repository } from "@/utils/github";
 import { useGitHubAppProvider } from "@/providers/GitHubApp";
 
@@ -86,7 +86,7 @@ export function RepositorySelector({
         size="sm"
       >
         <div className="flex items-center gap-2">
-          <GitHubSVG
+          <GitLabSVG
             width="16"
             height="16"
           />
@@ -105,7 +105,7 @@ export function RepositorySelector({
         size="sm"
       >
         <div className="flex items-center gap-2">
-          <GitHubSVG
+          <GitLabSVG
             width="16"
             height="16"
           />
@@ -124,7 +124,7 @@ export function RepositorySelector({
         size="sm"
       >
         <div className="flex items-center gap-2">
-          <GitHubSVG
+          <GitLabSVG
             width="16"
             height="16"
           />
@@ -143,7 +143,7 @@ export function RepositorySelector({
         size="sm"
       >
         <div className="flex items-center gap-2">
-          <GitHubSVG
+          <GitLabSVG
             width="16"
             height="16"
           />
@@ -161,7 +161,7 @@ export function RepositorySelector({
         size="sm"
       >
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <GitHubSVG />
+          <GitLabSVG />
           <span className="truncate text-left">
             {displayValue || placeholder}
           </span>
@@ -185,7 +185,7 @@ export function RepositorySelector({
           size="sm"
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <GitHubSVG />
+            <GitLabSVG />
             <span className="truncate text-left">
               {selectedValue || placeholder}
             </span>
